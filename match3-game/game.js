@@ -157,7 +157,15 @@ const sndBoosterDrop = () => { beep(660, 0.08, 'sine', 0.1); beep(880, 0.1, 'sin
 const sndChain = i => beep(460 + i * 130, 0.08, 'triangle', 0.07);
 
 /* ================= 背景音乐 ================= */
-const MUSIC = [261.63, 329.63, 392.0, 523.25];
+// 轻快愉悦的旋律（C 大调 I–IV–V–I 进行），跳音 + 低音伴奏 + 泛音点缀
+const MELODY = [
+  523.25, 659.25, 783.99, 659.25,   // C5 E5 G5 E5
+  440.00, 523.25, 698.46, 523.25,   // A4 C5 F5 C5
+  392.00, 493.88, 587.33, 493.88,   // G4 B4 D5 B4
+  659.25, 587.33, 523.25, 523.25    // E5 D5 C5 C5
+];
+const BASS = [130.81, 174.61, 196.00, 130.81]; // C3 F3 G3 C3
+const STEP_MS = 180;
 function startMusic() {
   if (musicTimer || muted) return;
   ensureCtx();
@@ -165,12 +173,13 @@ function startMusic() {
   musicStep = 0;
   musicTimer = setInterval(() => {
     if (muted || !ac) return;
-    const f = MUSIC[musicStep % MUSIC.length];
-    beep(f, 0.45, 'sine', 0.03);
-    if (musicStep % 4 === 0) beep(130.81, 1.0, 'triangle', 0.045);
-    if (musicStep % 2 === 0) beep(f * 2, 0.3, 'sine', 0.015);
+    const f = MELODY[musicStep % MELODY.length];
+    beep(f, 0.15, 'triangle', 0.055);                                  // 主旋律跳音
+    if (musicStep % 2 === 1) beep(f * 1.5, 0.08, 'sine', 0.02);        // 五度泛音点缀
+    if (musicStep % 4 === 0) beep(BASS[(musicStep >> 2) % BASS.length], 0.6, 'triangle', 0.05); // 低音伴奏
+    if (musicStep % 8 === 4) beep(f * 2, 0.12, 'sine', 0.02);          // 高八度点缀
     musicStep++;
-  }, 460);
+  }, STEP_MS);
 }
 function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; } }
 
