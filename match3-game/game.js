@@ -18,7 +18,7 @@ const BOOSTERS = {
   rocket: { icon: '🎯', label: '瞄准火箭' },
   rainbow: { icon: '🌈', label: '彩虹球' },
   moves: { icon: '➕', label: '加步数', instant: true },
-  time: { icon: '⏱', label: '加时器', instant: true },
+  shuffle: { icon: '🔄', label: '洗牌', instant: true },
   doubler: { icon: '✨', label: '双倍分数', instant: true }
 };
 const BOOSTER_KEYS = Object.keys(BOOSTERS);
@@ -27,11 +27,68 @@ const CLEAR_MS = 230, FALL_MS = 210;
 
 const MODES = {
   classic: { name: '经典模式', moves: 26, target: 4000 },
-  rush: { name: '限时模式', time: 60 },
+  levels: { name: '闯关模式' },
   collect: { name: '收集模式', moves: 24 },
   trial: { name: '挑战模式', moves: 26 },
   infinite: { name: '无限模式' }
 };
+
+/* ================= 30 关闯关配置 ================= */
+// 目标类型：score 分数 / collect 收集 / clear 清障 / craft 合成 / mixed 混合
+// 障碍字段：ice 冰数量(iceLv 层数) / lock 锁数量(lockLv 层数) / stone 陨石 / choco 巧克力
+// 星级全局规则：2星=剩余步数≥30%、3星=剩余步数≥50%
+const LEVELS = [
+  // —— 阶段① 新手村（1-5）——
+  { name: '初试身手', type: 'score', target: 2500, moves: 30, colors: 4 },
+  { name: '冰之初现', type: 'score', target: 3000, moves: 28, colors: 4, ice: 10 },
+  { name: '收集草莓', type: 'collect', collect: [{ t: 0, n: 15 }], moves: 26, colors: 4 },
+  { name: '锁链初现', type: 'score', target: 3500, moves: 26, colors: 4, lock: 8 },
+  { name: '双料收集', type: 'collect', collect: [{ t: 0, n: 12 }, { t: 4, n: 12 }], moves: 24, colors: 5, ice: 8 },
+
+  // —— 阶段② 特殊合成教学（6-10）——
+  { name: '造个火箭', type: 'craft', craft: [{ s: 'rocket', n: 2 }], moves: 24, colors: 3 },
+  { name: '造个炸弹', type: 'craft', craft: [{ s: 'bomb', n: 1 }], moves: 24, colors: 4, ice: 12 },
+  { name: '蓝莓葡萄', type: 'collect', collect: [{ t: 5, n: 15 }, { t: 2, n: 15 }], moves: 22, colors: 4, lock: 10 },
+  { name: '除冰作战', type: 'clear', moves: 22, colors: 4, ice: 30 },
+  { name: '造个彩虹', type: 'craft', craft: [{ s: 'rainbow', n: 1 }], moves: 26, colors: 4, ice: 10 },
+
+  // —— 阶段③ 障碍组合（11-15）——
+  { name: '破锁除陨', type: 'clear', moves: 24, colors: 5, lock: 15, stone: 6 },
+  { name: '双层冰', type: 'clear', moves: 22, colors: 5, ice: 12, iceLv: 2 },
+  { name: '分秒必争', type: 'mixed', target: 5000, collect: [{ t: 0, n: 10 }], moves: 22, colors: 5, ice: 10, lock: 6 },
+  { name: '弹药合成', type: 'craft', craft: [{ s: 'bomb', n: 2 }, { s: 'rocket', n: 2 }], moves: 20, colors: 4, lock: 8 },
+  { name: '冰锁夹击', type: 'clear', moves: 20, colors: 5, ice: 25, lock: 15 },
+
+  // —— 阶段④ 压力测试（16-20）——
+  { name: '高分冲刺', type: 'score', target: 8000, moves: 26, colors: 6, ice: 10 },
+  { name: '三重收集', type: 'collect', collect: [{ t: 0, n: 15 }, { t: 2, n: 15 }, { t: 5, n: 15 }], moves: 20, colors: 5, lock: 12, stone: 4 },
+  { name: '深冰陨石', type: 'clear', moves: 20, colors: 6, ice: 20, iceLv: 2, stone: 6 },
+  { name: '缤纷合成', type: 'craft', craft: [{ s: 'rainbow', n: 1 }, { s: 'bomb', n: 2 }], moves: 18, colors: 5, ice: 10 },
+  { name: '三线作战', type: 'mixed', target: 6000, collect: [{ t: 5, n: 15 }], clear: true, moves: 24, colors: 6, ice: 15, lock: 6, stone: 4 },
+
+  // —— 阶段⑤ 高手冲刺（21-25）——
+  { name: '满目荆棘', type: 'clear', moves: 22, colors: 6, lock: 20, stone: 8, ice: 10, iceLv: 2 },
+  { name: '四色丰收', type: 'collect', collect: [{ t: 0, n: 12 }, { t: 1, n: 12 }, { t: 2, n: 12 }, { t: 5, n: 12 }], moves: 20, colors: 6, ice: 12 },
+  { name: '武库合成', type: 'craft', craft: [{ s: 'rocket', n: 3 }, { s: 'bomb', n: 2 }, { s: 'rainbow', n: 1 }], moves: 16, colors: 5, lock: 12 },
+  { name: '冰封大地', type: 'clear', moves: 20, colors: 6, ice: 30, iceLv: 2 },
+  { name: '终极混战', type: 'mixed', target: 8000, collect: [{ t: 0, n: 20 }], clear: true, moves: 22, colors: 6, ice: 20, lock: 10, stone: 4 },
+
+  // —— 阶段⑥ 大师殿堂（26-30）——
+  { name: '万分开局', type: 'score', target: 10000, moves: 24, colors: 6, ice: 15, iceLv: 2 },
+  { name: '彩弹齐鸣', type: 'craft', craft: [{ s: 'rainbow', n: 2 }, { s: 'bomb', n: 2 }], moves: 20, colors: 5, lock: 15, stone: 6 },
+  { name: '钢铁壁垒', type: 'clear', moves: 22, colors: 6, lock: 25, stone: 10, ice: 15, iceLv: 2 },
+  { name: '王者试炼', type: 'mixed', target: 9000, collect: [{ t: 0, n: 15 }, { t: 1, n: 15 }, { t: 5, n: 15 }], clear: true, moves: 22, colors: 6, ice: 18, lock: 12, stone: 5 },
+  { name: '终极BOSS', type: 'mixed', target: 12000, craft: [{ s: 'rainbow', n: 1 }], clear: true, moves: 26, colors: 6, ice: 15, iceLv: 2, lock: 15, stone: 8, choco: 6 }
+];
+
+const STAGES = ['新手村', '特殊合成教学', '障碍组合', '压力测试', '高手冲刺', '大师殿堂'];
+const stageOf = lv => Math.floor((lv - 1) / 5);
+function craftIcon(s) {
+  if (s === 'rocket') return '🚀';
+  if (s === 'bomb') return '💣';
+  if (s === 'rainbow') return '🌈';
+  return s;
+}
 
 /* ================= 状态 ================= */
 let grid = [];
@@ -51,6 +108,14 @@ let timerId = null;
 let level = 1;
 let targetScore = 0;
 let collectRemain = [];
+let craftGoal = [];
+let clearGoal = false;
+let activeColors = 6;
+let curLevel = 1;
+let curStage = null;
+let lvUnlocked = +(localStorage.getItem('m3_unlocked') || 1);
+let lvStars = {};
+try { lvStars = JSON.parse(localStorage.getItem('m3_stars') || '{}'); } catch (e) { lvStars = {}; }
 let lastSwapA = null, lastSwapB = null;
 let sel = null;
 let drag = null;
@@ -72,7 +137,7 @@ const rand = n => Math.floor(Math.random() * n);
 const shuffleArr = a => { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const haptic = () => { try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {} };
 
-const mkGem = type => ({ id: ++gid, type, special: null, frozen: false, locked: false });
+const mkGem = type => ({ id: ++gid, type, special: null, frozen: 0, locked: 0, choco: false });
 const mkStone = () => ({ id: ++gid, stone: true });
 
 /* ================= 音效 ================= */
@@ -191,7 +256,7 @@ function randomTypeFor(r, c) {
   if (c >= 2 && isGem(grid[r][c - 1]) && isGem(grid[r][c - 2]) && grid[r][c - 1].type === grid[r][c - 2].type) bad.add(grid[r][c - 1].type);
   if (r >= 2 && isGem(grid[r - 1][c]) && isGem(grid[r - 2][c]) && grid[r - 1][c].type === grid[r - 2][c].type) bad.add(grid[r - 1][c].type);
   let t;
-  do { t = rand(N); } while (bad.has(t) && bad.size < N);
+  do { t = rand(activeColors); } while (bad.has(t) && bad.size < activeColors);
   return t;
 }
 
@@ -202,21 +267,20 @@ function initBoard(opts = {}) {
       grid[r][c] = mkGem(randomTypeFor(r, c));
     }
   }
-  // 挑战模式障碍
-  if (opts.obstacles) {
-    placeObstacles(opts.ice, opts.locked, opts.stone);
-  }
+  placeObstacles(opts);
 }
 
-function placeObstacles(ice, locked, stone) {
+function placeObstacles(o = {}) {
   const cells = [];
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) cells.push({ r, c });
   shuffleArr(cells);
   let i = 0;
   const take = n => { const out = []; while (i < cells.length && out.length < n) out.push(cells[i++]); return out; };
+  const stone = o.stone || 0, ice = o.ice || 0, lock = o.lock || 0, choco = o.choco || 0;
   take(stone).forEach(p => { grid[p.r][p.c] = mkStone(); });
-  take(ice).forEach(p => { if (grid[p.r][p.c] && !grid[p.r][p.c].stone) grid[p.r][p.c].frozen = true; });
-  take(locked).forEach(p => { if (grid[p.r][p.c] && !grid[p.r][p.c].stone) grid[p.r][p.c].locked = true; });
+  take(ice).forEach(p => { if (grid[p.r][p.c] && !grid[p.r][p.c].stone) grid[p.r][p.c].frozen = o.iceLv || 1; });
+  take(lock).forEach(p => { if (grid[p.r][p.c] && !grid[p.r][p.c].stone) grid[p.r][p.c].locked = o.lockLv || 1; });
+  take(choco).forEach(p => { if (grid[p.r][p.c] && !grid[p.r][p.c].stone) grid[p.r][p.c].choco = true; });
 }
 
 /* ================= 匹配检测 ================= */
@@ -422,14 +486,18 @@ function syncEl(el, g, r, c) {
   else {
     cls += ' gem t' + g.type;
     if (g.special) cls += ' special ' + g.special;
-    if (g.frozen) cls += ' frozen';
-    if (g.locked) cls += ' locked';
+    if (g.frozen > 0) cls += ' frozen' + (g.frozen >= 2 ? ' frozen2' : '');
+    if (g.locked > 0) cls += ' locked' + (g.locked >= 2 ? ' locked2' : '');
+    if (g.choco) cls += ' chocolate';
     if (g.new) cls += ' drop';
     if (g.spawned) cls += ' spawn-pop';
   }
   el.className = cls;
   el.querySelector('.face').textContent = g.stone ? '🪨' : GEMS[g.type];
-  const badge = g.special ? SPECIAL_META[g.special].icon : (g.locked ? '🔒' : (g.frozen ? '❄️' : ''));
+  const badge = g.special ? SPECIAL_META[g.special].icon
+    : (g.locked > 0 ? (g.locked >= 2 ? '⛓️' : '🔒')
+    : (g.frozen > 0 ? (g.frozen >= 2 ? '🧊' : '❄️')
+    : (g.choco ? '🍫' : '')));
   el.querySelector('.badge').textContent = badge;
   if (g.new) delete g.new;
   if (g.spawned) delete g.spawned;
@@ -470,7 +538,7 @@ function clearSel() {
 
 /* ================= 消除流程 ================= */
 function prepareMatch(cells, comps) {
-  const seed = new Set(); const spawns = []; const unlocks = [];
+  const seed = new Set(); const spawns = [];
   for (const comp of comps) {
     const g0 = grid[comp[0].r][comp[0].c];
     const info = specialInfo(comp);
@@ -479,12 +547,26 @@ function prepareMatch(cells, comps) {
     for (const p of comp) {
       const g = grid[p.r][p.c];
       if (!isGem(g)) continue;
-      if (g.locked) { unlocks.push({ r: p.r, c: p.c }); continue; }
       if (origin && p.r === origin.r && p.c === origin.c) continue;
       seed.add(key(p));
     }
   }
-  return { seed, spawns, unlocks };
+  return { seed, spawns };
+}
+
+/* 消除命中的障碍层数结算：锁/厚冰只掉层不消失，返回真正消失的格子 */
+function resolveHits(clear) {
+  const removed = new Set();
+  for (const k of clear) {
+    const [r, c] = k.split(',').map(Number);
+    const g = grid[r][c];
+    if (!g) continue;
+    if (g.locked > 1) { g.locked--; sndChain(2); continue; }
+    if (g.locked === 1) { g.locked--; sndLockBreak(); continue; }
+    if (g.frozen > 1) { g.frozen--; sndIceBreak(); continue; }
+    removed.add(k);
+  }
+  return removed;
 }
 
 function clearCenter(clear) {
@@ -669,7 +751,7 @@ function fxDoubler() {
   if (ui.buff) { ui.buff.classList.remove('show'); void ui.buff.offsetWidth; ui.buff.classList.add('show'); }
 }
 
-async function animateClear(clear) {
+async function animateClear(removed, clear) {
   // 按到消除中心的距离排序，分波爆炸，形成连锁扩散的视觉冲击
   const cells = [...clear].map(k => {
     const [r, c] = k.split(',').map(Number);
@@ -690,14 +772,16 @@ async function animateClear(clear) {
     const { r, c } = cells[i];
     const g = grid[r][c];
     const el = g ? els.get(g.id) : null;
-    if (el) {
+    if (!el) continue;
+    const kk = r + ',' + c;
+    if (removed.has(kk)) {
       el.classList.add('poof');
       spawnParticles(el, g);
-      if (!g.stone) waveColor = GEM_COLORS[g.type];
       if (g.special) { sndSpecialFire(g.special); sawSpecial = g.special; }
-      else if (g.locked) sndLockBreak();
-      else if (g.frozen) sndIceBreak();
+    } else {
+      el.classList.add('peel');
     }
+    if (!g.stone) waveColor = GEM_COLORS[g.type];
     if ((i + 1) % per === 0 && i < cells.length - 1) {
       sndChain(wave++);
       await sleep(36);
@@ -706,17 +790,18 @@ async function animateClear(clear) {
   spawnShockwave(clear, waveColor);
   if (sawSpecial) flashBoard(sawSpecial);
   await sleep(CLEAR_MS);
-  for (const k of clear) {
+  for (const k of removed) {
     const [r, c] = k.split(',').map(Number);
     const g = grid[r][c];
     if (g) { const el = els.get(g.id); if (el) el.remove(); els.delete(g.id); grid[r][c] = null; }
   }
+  render();
 }
 
-function updateTargets(clear) {
-  if (mode !== 'collect') return;
+function updateTargets(removed) {
+  if (!collectRemain.length) return;
   let changed = false;
-  for (const k of clear) {
+  for (const k of removed) {
     const [r, c] = k.split(',').map(Number);
     const g = grid[r][c];
     if (!isGem(g)) continue;
@@ -726,31 +811,56 @@ function updateTargets(clear) {
   if (changed) renderTargets();
 }
 
+function noteCraft(special) {
+  if (!craftGoal.length) return;
+  let changed = false;
+  for (const g of craftGoal) {
+    if (g.left <= 0) continue;
+    const hit = g.s === 'rocket' ? (special === 'lineH' || special === 'lineV') : (g.s === special);
+    if (hit) { g.left--; changed = true; if (g.left === 0) sndCollect(); }
+  }
+  if (changed) renderTargets();
+}
+
+function countObstacles() {
+  let n = 0;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const g = grid[r][c];
+    if (!g) continue;
+    if (g.stone || g.frozen > 0 || g.locked > 0 || g.choco) n++;
+  }
+  return n;
+}
+
 function collectDone() {
-  return mode === 'collect' && collectRemain.every(t => t.left <= 0);
+  return collectRemain.every(t => t.left <= 0);
+}
+
+function craftDone() {
+  return craftGoal.every(t => t.left <= 0);
 }
 
 async function resolve(initialSeed = null) {
   let combo = 0;
   let seed = initialSeed;
   while (true) {
-    let spawns = [], unlocks = [];
+    let spawns = [];
     if (!seed) {
       const { cells, comps } = detectMatches();
       if (cells.size === 0) break;
       const prep = prepareMatch(cells, comps);
-      seed = prep.seed; spawns = prep.spawns; unlocks = prep.unlocks;
+      seed = prep.seed; spawns = prep.spawns;
+      for (const s of spawns) noteCraft(s.special);
     }
     const { clear } = computeClearEffect(seed);
-    const finalUnlocks = unlocks.filter(p => !clear.has(key(p)));
+    const removed = resolveHits(clear);
     sndMatch(combo);
     if (combo > 0) {
       showCombo(combo + 1);
       if (mode === 'infinite') dropBooster('连击奖励');
     }
-    updateTargets(clear);
-    await animateClear(clear);
-    for (const p of finalUnlocks) { const g = grid[p.r][p.c]; if (isGem(g)) g.locked = false; }
+    updateTargets(removed);
+    await animateClear(removed, clear);
     for (const s of spawns) {
       const ng = mkGem(s.type);
       ng.special = s.special;
@@ -764,14 +874,15 @@ async function resolve(initialSeed = null) {
     sndDropFx();
     await sleep(FALL_MS);
     combo++;
-    const gained = clear.size * 10 * combo;
+    const gained = removed.size * 10 * combo;
     const actual = addScore(gained);
     updateHud();
-    spawnScoreFloat(clear, actual);
-    maybeDropBooster(clear.size, combo);
+    spawnScoreFloat(removed, actual);
+    maybeDropBooster(removed.size, combo);
     seed = null;
   }
   lastSwapA = lastSwapB = null;
+  renderTargets();
   return combo;
 }
 
@@ -823,12 +934,13 @@ async function doSpecialCombo(a, b, ga, gb) {
     specialArea(gb, b.r, b.c).forEach(p => seed.add(key(p)));
   }
   const { clear } = computeClearEffect(seed);
-  updateTargets(clear);
-  await animateClear(clear);
+  const removed = resolveHits(clear);
+  updateTargets(removed);
+  await animateClear(removed, clear);
   applyGravityAndRefill();
   render();
   await sleep(FALL_MS);
-  addScore(clear.size * 15);
+  addScore(removed.size * 15);
   updateHud();
   await resolve();
 }
@@ -840,12 +952,13 @@ async function rainbowWith(rainCell, otherCell, other) {
   }
   if (other.special) specialArea(other, otherCell.r, otherCell.c).forEach(p => seed.add(key(p)));
   const { clear } = computeClearEffect(seed);
-  updateTargets(clear);
-  await animateClear(clear);
+  const removed = resolveHits(clear);
+  updateTargets(removed);
+  await animateClear(removed, clear);
   applyGravityAndRefill();
   render();
   await sleep(FALL_MS);
-  addScore(clear.size * 15);
+  addScore(removed.size * 15);
   updateHud();
   await resolve();
 }
@@ -870,7 +983,7 @@ async function attemptMove(a, b) {
   if (busy || gameOver || !running) return;
   const ga = grid[a.r][a.c], gb = grid[b.r][b.c];
   if (!ga || !gb || ga.stone || gb.stone) return;
-  if (ga.frozen || gb.frozen || ga.locked || gb.locked) {
+  if (ga.frozen > 0 || gb.frozen > 0 || ga.locked > 0 || gb.locked > 0) {
     const fa = els.get(ga.id), fb = els.get(gb.id);
     if (fa) fa.classList.add('shake');
     if (fb) fb.classList.add('shake');
@@ -881,7 +994,7 @@ async function attemptMove(a, b) {
   busy = true;
   const ok = await tryMove(a, b, ga, gb);
   if (ok) {
-    if (mode !== 'rush' && mode !== 'infinite') { moves--; updateHud(); }
+    if (mode !== 'infinite') { moves--; updateHud(); }
     evaluateEnd();
   }
   busy = false;
@@ -893,12 +1006,12 @@ async function attemptMove(a, b) {
 function hasAnyMove() {
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const ga = grid[r][c];
-    if (!isGem(ga)) continue;
+    if (!isGem(ga) || ga.frozen > 0 || ga.locked > 0) continue;
     for (const [dr, dc] of DIRS) {
       const nr = r + dr, nc = c + dc;
       if (nr < 0 || nc < 0 || nr >= ROWS || nc >= COLS) continue;
       const gb = grid[nr][nc];
-      if (!isGem(gb)) continue;
+      if (!isGem(gb) || gb.frozen > 0 || gb.locked > 0) continue;
       swapCells({ r, c }, { r: nr, c: nc });
       const m = hasMatch();
       swapCells({ r, c }, { r: nr, c: nc });
@@ -913,7 +1026,7 @@ function shuffleUntilMovable() {
   do {
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const g = grid[r][c];
-      if (isGem(g) && !g.frozen && !g.locked) { g.type = rand(N); g.special = null; }
+      if (isGem(g) && g.frozen === 0 && g.locked === 0) { g.type = rand(activeColors); g.special = null; }
     }
     tries++;
   } while ((hasMatch() || !hasAnyMove()) && tries < 500);
@@ -946,8 +1059,7 @@ function clearAim() {
 }
 
 function boosterUsable(k) {
-  if (k === 'moves' && mode === 'rush') return false;
-  if (k === 'time' && mode !== 'rush') return false;
+  if (k === 'moves' && mode === 'infinite') return false;
   return true;
 }
 
@@ -985,9 +1097,9 @@ function activateInstaBooster(b) {
   if (b === 'moves') {
     moves += 5; updateHud(); toast('步数 +5');
     sndMovesUp(); fxResource('步数+5', '#2ecc71', '➕');
-  } else if (b === 'time') {
-    timeLeft += 10; updateHud(); toast('时间 +10 秒');
-    sndTimeUp(); fxResource('时间+10s', '#7ad0ff', '⏱');
+  } else if (b === 'shuffle') {
+    sndShuffle(); shuffleUntilMovable(); render();
+    toast('棋盘已重新洗牌'); shakeScreen();
   } else if (b === 'doubler') {
     activateDoubler(); toast('双倍分数生效 15 秒！');
     sndDoublerUp(); fxDoubler();
@@ -995,7 +1107,7 @@ function activateInstaBooster(b) {
 }
 
 function resetBoosters() {
-  boosters = { hammer: 2, bomb: 2, rocket: 2, rainbow: 2, moves: 2, time: 2, doubler: 2 };
+  boosters = { hammer: 2, bomb: 2, rocket: 2, rainbow: 2, moves: 2, shuffle: 2, doubler: 2 };
   stopDoubler();
   clearAim();
   updateBoosters();
@@ -1046,8 +1158,8 @@ function maybeDropBooster(clearSize, comboCount) {
   if (chance > 0 && Math.random() < chance) dropBooster();
 }
 
-async function settleBoost(clear) {
-  const gained = addScore(clear.size * 15);
+async function settleBoost(removed, clear) {
+  const gained = addScore(removed.size * 15);
   updateHud();
   spawnScoreFloat(clear, gained);
   applyGravityAndRefill();
@@ -1063,8 +1175,10 @@ async function useHammer(cell) {
   sndHammer();
   fxHammer(cell);
   const { clear } = computeClearEffect(new Set([key(cell)]));
-  await animateClear(clear);
-  await settleBoost(clear);
+  const removed = resolveHits(clear);
+  updateTargets(removed);
+  await animateClear(removed, clear);
+  await settleBoost(removed, clear);
 }
 
 async function useBomb(cell) {
@@ -1079,8 +1193,10 @@ async function useBomb(cell) {
     if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) seed.add(key({ r: rr, c: cc }));
   }
   const { clear } = computeClearEffect(seed);
-  await animateClear(clear);
-  await settleBoost(clear);
+  const removed = resolveHits(clear);
+  updateTargets(removed);
+  await animateClear(removed, clear);
+  await settleBoost(removed, clear);
 }
 
 async function useRocket(cell) {
@@ -1088,22 +1204,26 @@ async function useRocket(cell) {
   if (!isGem(g) || g.stone) { toast('只能对糖果使用'); return; }
   if (!consumeBooster('rocket')) return;
   const dir = Math.random() < 0.5 ? 'lineH' : 'lineV';
-  g.special = dir; g.frozen = false; g.locked = false;
+  g.special = dir; g.frozen = 0; g.locked = 0;
   showBanner(dir); sndRocketLaunch(); fxRocket(cell, dir);
   const { clear } = computeClearEffect(new Set([key(cell)]));
-  await animateClear(clear);
-  await settleBoost(clear);
+  const removed = resolveHits(clear);
+  updateTargets(removed);
+  await animateClear(removed, clear);
+  await settleBoost(removed, clear);
 }
 
 async function useRainbow(cell) {
   const g = grid[cell.r][cell.c];
   if (!isGem(g) || g.stone) { toast('只能对糖果使用'); return; }
   if (!consumeBooster('rainbow')) return;
-  g.special = 'rainbow'; g.frozen = false; g.locked = false;
+  g.special = 'rainbow'; g.frozen = 0; g.locked = 0;
   showBanner('rainbow'); sndRainbowBoost(); fxRainbow();
   const { clear } = computeClearEffect(new Set([key(cell)]));
-  await animateClear(clear);
-  await settleBoost(clear);
+  const removed = resolveHits(clear);
+  updateTargets(removed);
+  await animateClear(removed, clear);
+  await settleBoost(removed, clear);
 }
 
 async function fireBooster(b, cell) {
@@ -1190,27 +1310,35 @@ function setScore(v) {
 
 function updateHud() {
   setScore(score);
-  if (mode !== 'rush') ui.hMoves.textContent = (moves === Infinity ? '∞' : moves);
-  if (mode === 'rush') {
-    ui.hTime.textContent = timeLeft;
-    ui.hTime.classList.toggle('low', timeLeft <= 5 && timeLeft >= 0);
-  }
+  ui.hMoves.textContent = (moves === Infinity ? '∞' : moves);
 }
 
 function updateBest() {
   if (ui.hBest) ui.hBest.textContent = +(localStorage.getItem('m3_best_' + mode) || 0);
 }
 
+function targetChip(icon, text, done) {
+  const d = document.createElement('div');
+  d.className = 'target' + (done ? ' done' : '');
+  d.innerHTML = `<span>${icon}</span><span class="ct">${text}</span>`;
+  return d;
+}
+
 function renderTargets() {
   const box = ui.targets;
-  if (mode !== 'collect') { box.innerHTML = ''; return; }
   box.innerHTML = '';
-  for (const t of collectRemain) {
-    const d = document.createElement('div');
-    d.className = 'target' + (t.left <= 0 ? ' done' : '');
-    d.innerHTML = `<span>${GEMS[t.type]}</span><span class="ct">${Math.max(0, t.left)}</span>`;
-    box.appendChild(d);
+  if (mode === 'collect') {
+    for (const t of collectRemain) box.appendChild(targetChip(GEMS[t.type], Math.max(0, t.left), t.left <= 0));
+    return;
   }
+  if (mode !== 'levels') return;
+  if (targetScore > 0) box.appendChild(targetChip('⭐', Math.min(score, targetScore) + '/' + targetScore, score >= targetScore));
+  for (const t of collectRemain) box.appendChild(targetChip(GEMS[t.type], Math.max(0, t.left), t.left <= 0));
+  if (clearGoal) {
+    const left = countObstacles();
+    box.appendChild(targetChip('🧱', Math.max(0, left), left <= 0));
+  }
+  for (const g of craftGoal) box.appendChild(targetChip(craftIcon(g.s), Math.max(0, g.left), g.left <= 0));
 }
 
 function toast(msg) {
@@ -1221,8 +1349,37 @@ function toast(msg) {
 }
 
 /* ================= 结束判定 ================= */
+function levelGoalDone() {
+  if (collectRemain.length && !collectRemain.every(t => t.left <= 0)) return false;
+  if (craftGoal.length && !craftGoal.every(t => t.left <= 0)) return false;
+  if (clearGoal && countObstacles() > 0) return false;
+  if (targetScore > 0 && score < targetScore) return false;
+  return true;
+}
+
+function calcStars() {
+  const cfg = LEVELS[curLevel - 1];
+  const p = cfg.moves ? moves / cfg.moves : 0;
+  if (p >= 0.5) return 3;
+  if (p >= 0.3) return 2;
+  return 1;
+}
+
+function saveLevelProgress(stars) {
+  const cur = lvStars[curLevel] || 0;
+  lvStars[curLevel] = Math.max(cur, stars);
+  try { localStorage.setItem('m3_stars', JSON.stringify(lvStars)); } catch (e) {}
+  if (curLevel >= lvUnlocked && curLevel < LEVELS.length) {
+    lvUnlocked = curLevel + 1;
+    try { localStorage.setItem('m3_unlocked', String(lvUnlocked)); } catch (e) {}
+  }
+}
+
 function evaluateEnd() {
-  if (mode === 'collect') {
+  if (mode === 'levels') {
+    if (levelGoalDone()) return gameWin();
+    if (moves <= 0) return gameLose();
+  } else if (mode === 'collect') {
     if (collectDone()) return gameWin();
     if (moves <= 0) return gameLose();
   } else if (mode === 'classic' || mode === 'trial') {
@@ -1233,39 +1390,61 @@ function evaluateEnd() {
 
 function gameWin() {
   gameOver = true; stopTimer();
-  const win = mode === 'trial';
-  ui.resultTitle.textContent = win ? '关卡通过！' : '胜利！';
-  ui.resultTitle.style.color = '#7ad0ff';
-  ui.resultScore.textContent = score;
-  ui.resultSub.textContent = win ? `第 ${level} 关完成，准备好进入下一关了吗？` : '太棒了，你达成了目标！';
-  ui.btnNext.style.display = win && level < 3 ? '' : 'none';
-  if (level >= 3 && win) ui.btnNext.style.display = 'none';
+  ui.resultBest.textContent = '';
+  ui.resultStars.style.display = 'none'; ui.resultStars.textContent = '';
+  ui.btnNext.textContent = '下一关';
+  if (mode === 'levels') {
+    const stars = calcStars();
+    saveLevelProgress(stars);
+    const cfg = LEVELS[curLevel - 1];
+    const isLast = curLevel >= LEVELS.length;
+    ui.resultTitle.textContent = isLast ? '🎉 全部通关！' : '过关啦！';
+    ui.resultTitle.style.color = '#ffd166';
+    ui.resultStars.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    ui.resultStars.className = 'result-stars s' + stars;
+    ui.resultStars.style.display = '';
+    ui.resultScore.textContent = score;
+    ui.resultSub.textContent = '第 ' + curLevel + ' 关 · ' + cfg.name;
+    ui.btnNext.style.display = '';
+    ui.btnNext.textContent = isLast ? '关卡选择' : '下一关';
+  } else if (mode === 'trial') {
+    ui.resultTitle.textContent = '关卡通过！';
+    ui.resultTitle.style.color = '#7ad0ff';
+    ui.resultScore.textContent = score;
+    ui.resultSub.textContent = `第 ${level} 关完成，准备好进入下一关了吗？`;
+    ui.btnNext.style.display = level < 3 ? '' : 'none';
+  } else {
+    ui.resultTitle.textContent = '胜利！';
+    ui.resultTitle.style.color = '#7ad0ff';
+    ui.resultScore.textContent = score;
+    ui.resultSub.textContent = '太棒了，你达成了目标！';
+    ui.btnNext.style.display = 'none';
+  }
   ui.overlay.classList.add('show');
   sndWin();
-  saveBest();
+  if (mode !== 'levels') saveBest();
 }
 
 function gameLose() {
   gameOver = true; stopTimer();
-  ui.resultTitle.textContent = '挑战失败';
-  ui.resultTitle.style.color = '#ff7ad9';
-  ui.resultScore.textContent = score;
-  ui.resultSub.textContent = mode === 'classic' || mode === 'trial' ? `目标 ${targetScore} 分，还差一点，再试试吧！` : '步数用完了，再试试吧！';
+  ui.resultStars.style.display = 'none'; ui.resultStars.textContent = '';
   ui.btnNext.style.display = 'none';
+  if (mode === 'levels') {
+    const cfg = LEVELS[curLevel - 1];
+    ui.resultTitle.textContent = '挑战失败';
+    ui.resultTitle.style.color = '#ff7ad9';
+    ui.resultScore.textContent = score;
+    ui.resultSub.textContent = '第 ' + curLevel + ' 关 · ' + cfg.name + '，步数用完了，再试一次！';
+    ui.resultBest.textContent = '';
+  } else {
+    ui.resultTitle.textContent = '挑战失败';
+    ui.resultTitle.style.color = '#ff7ad9';
+    ui.resultScore.textContent = score;
+    ui.resultSub.textContent = mode === 'classic' || mode === 'trial' ? `目标 ${targetScore} 分，还差一点，再试试吧！` : '步数用完了，再试试吧！';
+  }
   ui.overlay.classList.add('show');
   sndLose();
-  saveBest();
-}
-
-function endRush() {
-  gameOver = true; stopTimer();
-  ui.resultTitle.textContent = '时间到！';
-  ui.resultTitle.style.color = '#ffd166';
-  ui.resultScore.textContent = score;
-  ui.resultSub.textContent = '限时模式以最终得分为准，冲击更高记录吧！';
-  ui.btnNext.style.display = 'none';
-  ui.overlay.classList.add('show');
-  saveBest();
+  if (mode !== 'levels') saveBest();
 }
 
 function saveBest() {
@@ -1286,19 +1465,29 @@ function startGame(m) {
   score = 0; level = (m === 'trial') ? level : 1;
   sel = null; drag = null; lastSwapA = lastSwapB = null;
   scoreShown = 0;
+  activeColors = N;
+  collectRemain = []; craftGoal = []; clearGoal = false; targetScore = 0;
   resetBoosters();
   if (ui.resultBest) ui.resultBest.textContent = '';
   els.forEach(el => el.remove()); els.clear();
 
   let opts = {};
-  if (m === 'trial') {
-    opts = { obstacles: true, ice: 3 + level * 2, locked: 1 + level, stone: 2 + level * 2 };
+  let cfg = null;
+  if (m === 'levels') {
+    cfg = LEVELS[curLevel - 1] || LEVELS[0];
+    activeColors = cfg.colors || 4;
+    moves = cfg.moves;
+    targetScore = cfg.target || 0;
+    collectRemain = (cfg.collect || []).map(x => ({ type: x.t, left: x.n }));
+    craftGoal = (cfg.craft || []).map(x => ({ s: x.s, left: x.n }));
+    clearGoal = cfg.type === 'clear' || !!cfg.clear;
+    opts = { stone: cfg.stone || 0, ice: cfg.ice || 0, iceLv: cfg.iceLv || 1, lock: cfg.lock || 0, lockLv: cfg.lockLv || 1, choco: cfg.choco || 0 };
+  } else if (m === 'trial') {
+    opts = { ice: 3 + level * 2, iceLv: 1, lock: 1 + level, lockLv: 1, stone: 2 + level * 2 };
     moves = MODES.trial.moves;
     targetScore = 2000 + (level - 1) * 1200;
   } else if (m === 'classic') {
     moves = MODES.classic.moves; targetScore = MODES.classic.target;
-  } else if (m === 'rush') {
-    timeLeft = MODES.rush.time;
   } else if (m === 'collect') {
     moves = MODES.collect.moves;
     const order = shuffleArr([0, 1, 2, 3, 4, 5]).slice(0, 4);
@@ -1315,35 +1504,33 @@ function startGame(m) {
   if (!hasAnyMove()) shuffleUntilMovable();
 
   // HUD 显示
-  ui.hudMoves.style.display = (m !== 'rush') ? '' : 'none';
+  ui.hudMoves.style.display = '';
   ui.hudMoves.querySelector('.k').textContent = (m === 'infinite') ? '无限步数' : '剩余步数';
-  ui.hudTime.style.display = (m === 'rush') ? '' : 'none';
-  ui.hudLevel.style.display = (m === 'trial') ? '' : 'none';
-  ui.hudTarget.style.display = (m === 'classic' || m === 'trial') ? '' : 'none';
-  if (m === 'classic' || m === 'trial') ui.hTarget.textContent = targetScore;
+  ui.hudTime.style.display = 'none';
+  ui.hudLevel.style.display = (m === 'trial' || m === 'levels') ? '' : 'none';
   if (m === 'trial') ui.hLevel.textContent = level;
-  if (m !== 'collect') collectRemain = [];
+  if (m === 'levels') ui.hLevel.textContent = curLevel + '/' + LEVELS.length;
+  const showTarget = (m === 'classic' || m === 'trial') || (m === 'levels' && targetScore > 0);
+  ui.hudTarget.style.display = showTarget ? '' : 'none';
+  if (m === 'classic' || m === 'trial') ui.hTarget.textContent = targetScore;
+  if (m === 'levels' && targetScore > 0) ui.hTarget.textContent = targetScore;
 
   ui.overlay.classList.remove('show');
+  ui.levelOverlay.classList.remove('show');
   ui.btnNext.style.display = 'none';
   setActiveModeBtn(m);
   updateBest();
   renderTargets();
   updateHud();
-  ui.tip.textContent = (m === 'infinite') ? '无限步数随意玩，打出连击即可获得道具奖励！' : '按住糖果向上下左右拖动，交换位置凑成 3 个以上即可消除';
+  if (m === 'levels') {
+    const st = stageOf(curLevel);
+    ui.tip.textContent = `第 ${curLevel} 关 · ${cfg.name}（阶段${st + 1} ${STAGES[st]}），达成目标即通关并解锁下一关`;
+  } else {
+    ui.tip.textContent = (m === 'infinite') ? '无限步数随意玩，打出连击即可获得道具奖励！' : '按住糖果向上下左右拖动，交换位置凑成 3 个以上即可消除';
+  }
   render();
   running = true;
   scheduleAutoHint();
-
-  if (m === 'rush') {
-    timerId = setInterval(() => {
-      if (gameOver) return;
-      timeLeft--;
-      updateHud();
-      if (timeLeft <= 5 && timeLeft > 0) sndCountdown();
-      if (timeLeft <= 0) { endRush(); }
-    }, 1000);
-  }
 }
 
 function setActiveModeBtn(m) {
@@ -1356,8 +1543,55 @@ function restartModes() {
 }
 
 function nextLevel() {
-  level++;
-  startGame('trial');
+  if (mode === 'levels') {
+    if (curLevel < LEVELS.length) { curLevel++; startGame('levels'); }
+    else openLevelSelect();
+  } else if (mode === 'trial') {
+    level++;
+    startGame('trial');
+  }
+}
+
+/* ================= 关卡选择器 ================= */
+function openLevelSelect() {
+  renderLevelSelect();
+  setActiveModeBtn('levels');
+  ui.levelOverlay.classList.add('show');
+}
+
+function closeLevelSelect() {
+  ui.levelOverlay.classList.remove('show');
+  if (running) setActiveModeBtn(mode);
+}
+
+function renderLevelSelect() {
+  const box = ui.stageList;
+  box.innerHTML = '';
+  for (let s = 0; s < 6; s++) {
+    const grp = document.createElement('div');
+    grp.className = 'stage-group';
+    const title = document.createElement('div');
+    title.className = 'stage-title';
+    title.textContent = '阶段' + (s + 1) + ' · ' + STAGES[s];
+    grp.appendChild(title);
+    const gridEl = document.createElement('div');
+    gridEl.className = 'lv-grid';
+    for (let i = 1; i <= 5; i++) {
+      const lv = s * 5 + i;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'lv-btn';
+      const unlocked = lv <= lvUnlocked;
+      const stars = lvStars[lv] || 0;
+      if (!unlocked) btn.classList.add('lock');
+      else if (stars) btn.classList.add('s' + stars);
+      btn.innerHTML = '<span class="lv-n">' + lv + '</span><span class="lv-stars">' + (stars ? '★'.repeat(stars) : '') + '</span>';
+      if (unlocked) btn.addEventListener('click', () => { closeLevelSelect(); curLevel = lv; startGame('levels'); });
+      gridEl.appendChild(btn);
+    }
+    grp.appendChild(gridEl);
+    box.appendChild(grp);
+  }
 }
 
 /* ================= 输入 ================= */
@@ -1455,8 +1689,18 @@ function bind() {
   ui.btnNext = document.getElementById('btn-next');
   ui.boosters = document.getElementById('boosters');
   ui.buff = document.getElementById('buff');
+  ui.resultStars = document.getElementById('result-stars');
+  ui.levelOverlay = document.getElementById('level-overlay');
+  ui.stageList = document.getElementById('stage-list');
 
-  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => { level = 1; startGame(b.dataset.mode); }));
+  document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
+    const m = b.dataset.mode;
+    if (m === 'levels') { openLevelSelect(); return; }
+    level = 1;
+    startGame(m);
+  }));
+  document.getElementById('btn-level-back').addEventListener('click', closeLevelSelect);
+  ui.levelOverlay.addEventListener('click', e => { if (e.target === ui.levelOverlay) closeLevelSelect(); });
   ui.btnAgain.addEventListener('click', restartModes);
   ui.btnNext.addEventListener('click', nextLevel);
   document.querySelectorAll('.booster').forEach(b => b.addEventListener('click', () => toggleAim(b.dataset.b)));

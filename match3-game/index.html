@@ -13,7 +13,7 @@
   <div class="wrap">
     <div class="modes" id="modes">
       <div class="mode-btn" data-mode="classic"><div class="n">经典模式</div><div class="d">步数冲刺</div></div>
-      <div class="mode-btn" data-mode="rush"><div class="n">限时模式</div><div class="d">60秒疯狂</div></div>
+      <div class="mode-btn" data-mode="levels"><div class="n">闯关模式</div><div class="d">30关挑战</div></div>
       <div class="mode-btn" data-mode="collect"><div class="n">收集模式</div><div class="d">指定糖果</div></div>
       <div class="mode-btn" data-mode="trial"><div class="n">挑战模式</div><div class="d">三重考验</div></div>
       <div class="mode-btn" data-mode="infinite"><div class="n">无限模式</div><div class="d">连击送道具</div></div>
@@ -34,7 +34,7 @@
       <button class="booster" data-b="rocket" title="瞄准火箭：点选糖果变成火箭"><span class="ic">🎯</span><span class="n">0</span></button>
       <button class="booster" data-b="rainbow" title="彩虹球：点选糖果变成彩虹"><span class="ic">🌈</span><span class="n">0</span></button>
       <button class="booster" data-b="moves" title="加步数：步数 +5"><span class="ic">➕</span><span class="n">0</span></button>
-      <button class="booster" data-b="time" title="加时器：时间 +10 秒"><span class="ic">⏱</span><span class="n">0</span></button>
+      <button class="booster" data-b="shuffle" title="洗牌：重新打乱棋盘"><span class="ic">🔄</span><span class="n">0</span></button>
       <button class="booster" data-b="doubler" title="双倍分数：15 秒内得分 ×2"><span class="ic">✨</span><span class="n">0</span></button>
     </div>
 
@@ -58,7 +58,7 @@
     <div class="rules">
       <b>特殊合成：</b>4 连 = 🚀 火箭（横/竖清一排） · T/L 形 = 💣 炸弹（3×3） · 5 连 = 🌈 彩虹（清同色全部）<br>
       <b>特殊互碰：</b>火箭+炸弹、双彩虹等可触发更大范围爆发 · 连击有倍率加成<br>
-      <b>挑战模式障碍：</b>❄️ 冰冻（不可移动，可被消除解封） · 🔒 锁链（不可移动，先破锁再消除） · 🪨 陨石（阻挡，需特殊宝石炸毁）
+      <b>闯关模式障碍：</b>❄️ 冰冻（1-2 层） · 🔒 锁链（1-2 层） · 🍫 巧克力（清除目标） · 🪨 陨石（阻挡） · 剩余步数越多星级越高
     </div>
   </div>
 
@@ -66,11 +66,23 @@
     <div class="card">
       <h2 id="result-title">胜利！</h2>
       <div class="score-big" id="result-score">0</div>
+      <div class="result-stars" id="result-stars" style="display:none"></div>
       <div class="result-best" id="result-best"></div>
       <p id="result-sub"></p>
       <div class="controls">
         <button class="btn primary" id="btn-again">再来一局</button>
         <button class="btn" id="btn-next" style="display:none">下一关</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="level-overlay">
+    <div class="card level-card">
+      <h2>选择关卡</h2>
+      <p class="level-hint">通关解锁下一关 · 剩余步数越多星级越高（≥50% 三星）</p>
+      <div class="stages" id="stage-list"></div>
+      <div class="controls" style="margin-top:16px">
+        <button class="btn" id="btn-level-back">返回</button>
       </div>
     </div>
   </div>
