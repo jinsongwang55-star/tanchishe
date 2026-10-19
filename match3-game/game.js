@@ -41,6 +41,7 @@ let targetScore = 0;
 let collectRemain = [];
 let lastSwapA = null, lastSwapB = null;
 let sel = null;
+let drag = null;
 let muted = localStorage.getItem('m3_muted') === '1';
 
 const ui = {};
@@ -535,8 +536,6 @@ function swapCells(a, b) {
   const t = grid[a.r][a.c]; grid[a.r][a.c] = grid[b.r][b.c]; grid[b.r][b.c] = t;
 }
 
-function isAdjacent(a, b) { return Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1; }
-
 function swapBackOrShake(a, b) {
   swapCells(a, b); render();
   const ga = grid[a.r][a.c], gb = grid[b.r][b.c];
@@ -848,33 +847,57 @@ function nextLevel() {
 }
 
 /* ================= 输入 ================= */
-function cellFromEvent(e) {
+function cellFromEvent(x, y) {
   const rect = ui.board.getBoundingClientRect();
-  const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-  const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-  const c = Math.floor(x / cellSize), r = Math.floor(y / cellSize);
+  const cx = x - rect.left, cy = y - rect.top;
+  const c = Math.floor(cx / cellSize), r = Math.floor(cy / cellSize);
   if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
   return { r, c };
+}
+
+function pointerPos(e) {
+  const x = e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX;
+  const y = e.touches && e.touches[0] ? e.touches[0].clientY : e.clientY;
+  return { x, y };
 }
 
 function onPointerDown(e) {
   if (!running || busy || gameOver) return;
   e.preventDefault();
-  const cell = cellFromEvent(e);
+  const pos = pointerPos(e);
+  const cell = cellFromEvent(pos.x, pos.y);
   if (!cell) return;
   const g = grid[cell.r][cell.c];
-  if (!g) { clearSel(); return; }
-  if (sel) {
-    if (sel.r === cell.r && sel.c === cell.c) { clearSel(); return; }
-    if (isAdjacent(sel, cell)) {
-      const from = sel; clearSel();
-      attemptMove(from, cell);
-      return;
-    }
-    setSel(cell);
-  } else {
-    setSel(cell);
-  }
+  if (!g || g.stone) { clearSel(); return; }
+  drag = { r: cell.r, c: cell.c, x: pos.x, y: pos.y };
+  setSel(cell);
+  try { ui.board.setPointerCapture(e.pointerId); } catch (_) {}
+}
+
+function onPointerMove(e) {
+  if (!drag || busy || gameOver) return;
+  e.preventDefault();
+  const pos = pointerPos(e);
+  const dx = pos.x - drag.x, dy = pos.y - drag.y;
+  const threshold = cellSize * 0.3;
+  if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+  let dr = 0, dc = 0;
+  if (Math.abs(dx) > Math.abs(dy)) dc = dx > 0 ? 1 : -1;
+  else dr = dy > 0 ? 1 : -1;
+  const nr = drag.r + dr, nc = drag.c + dc;
+  const from = { r: drag.r, c: drag.c };
+  drag = null;
+  clearSel();
+  if (nr < 0 || nc < 0 || nr >= ROWS || nc >= COLS) return;
+  attemptMove(from, { r: nr, c: nc });
+}
+
+function onPointerUp(e) {
+  if (drag) { drag = null; clearSel(); }
+}
+
+function onPointerCancel(e) {
+  if (drag) { drag = null; clearSel(); }
 }
 
 /* ================= 初始化 ================= */
@@ -914,7 +937,9 @@ function bind() {
   document.getElementById('btn-mute').textContent = muted ? '🔇 音效' : '🔊 音效';
 
   ui.board.addEventListener('pointerdown', onPointerDown);
-  ui.board.addEventListener('touchstart', e => { if (e.touches.length === 1) { /* pointerdown 会处理 */ } }, { passive: false });
+  ui.board.addEventListener('pointermove', onPointerMove);
+  ui.board.addEventListener('pointerup', onPointerUp);
+  ui.board.addEventListener('pointercancel', onPointerCancel);
 
   window.addEventListener('resize', () => { layout(); render(); });
 }
