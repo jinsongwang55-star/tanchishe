@@ -1717,6 +1717,8 @@ function bind() {
   ui.board.addEventListener('pointermove', onPointerMove);
   ui.board.addEventListener('pointerup', onPointerUp);
   ui.board.addEventListener('pointercancel', onPointerCancel);
+  ui.board.addEventListener('contextmenu', e => e.preventDefault());
+  ui.board.addEventListener('dragstart', e => e.preventDefault());
 
   window.addEventListener('resize', () => { layout(); render(); });
 }
