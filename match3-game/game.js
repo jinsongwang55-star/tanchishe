@@ -131,7 +131,29 @@ const sndCountdown = () => { beep(880, 0.07, 'square', 0.08); beep(880, 0.07, 's
 const sndCollect = () => { beep(660, 0.1, 'sine', 0.1); beep(880, 0.15, 'sine', 0.09, 0.07); };
 const sndWin = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.22, 'sine', 0.12, i * 0.12));
 const sndLose = () => [400, 330, 260, 200].forEach((f, i) => beep(f, 0.25, 'sine', 0.1, i * 0.13));
-const sndBooster = () => { beep(620, 0.08, 'triangle', 0.1); beep(930, 0.12, 'triangle', 0.08, 0.06); };
+function sweep(f0, f1, dur, type = 'sine', vol = 0.1, delay = 0) {
+  if (muted) return;
+  ensureCtx();
+  if (!ac) return;
+  const t = ac.currentTime + delay;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(Math.max(1, f0), t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(ac.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+const sndHammer = () => { noiseBurst(0.16, 0.22); beep(85, 0.2, 'sawtooth', 0.13); beep(50, 0.2, 'square', 0.1, 0.01); };
+const sndBombBlast = () => { noiseBurst(0.5, 0.3); beep(80, 0.45, 'sawtooth', 0.14); beep(45, 0.4, 'sine', 0.1, 0.02); };
+const sndRocketLaunch = () => { sweep(160, 980, 0.28, 'sawtooth', 0.1); sweep(240, 1400, 0.16, 'square', 0.06, 0.08); };
+const sndRainbowBoost = () => [523, 659, 784, 988, 1175, 1397, 1568].forEach((f, i) => beep(f, 0.12, 'sine', 0.08, i * 0.05));
+const sndMovesUp = () => { beep(523, 0.09, 'triangle', 0.1); beep(659, 0.1, 'triangle', 0.1, 0.07); beep(784, 0.16, 'triangle', 0.1, 0.14); };
+const sndTimeUp = () => { beep(880, 0.06, 'square', 0.08); beep(988, 0.06, 'square', 0.08, 0.1); beep(1175, 0.14, 'triangle', 0.09, 0.2); };
+const sndDoublerUp = () => [440, 554, 659, 880, 1109, 1319, 1760].forEach((f, i) => beep(f, 0.14, 'sine', 0.09, i * 0.04));
+const sndBoosterDrop = () => { beep(660, 0.08, 'sine', 0.1); beep(880, 0.1, 'sine', 0.09, 0.06); beep(1100, 0.14, 'sine', 0.08, 0.12); };
 
 /* ================= 背景音乐 ================= */
 const MUSIC = [261.63, 329.63, 392.0, 523.25];
@@ -487,6 +509,125 @@ function flashBoard(sp) {
   f.addEventListener('animationend', () => f.remove());
 }
 
+/* ================= 道具华丽特效 ================= */
+function cellCenter(cell) {
+  return { x: (cell.c + 0.5) * cellSize, y: (cell.r + 0.5) * cellSize };
+}
+function flashColor(color) {
+  const f = document.createElement('div');
+  f.className = 'flash';
+  f.style.background = 'radial-gradient(circle, rgba(255,255,255,.95) 0%, ' + color + ' 45%, transparent 78%)';
+  ui.board.appendChild(f);
+  f.addEventListener('animationend', () => f.remove());
+}
+function emit(x, y, color, count, opts = {}) {
+  const spread = opts.spread || 1;
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = cellSize * (opts.size || 0.14) * (0.6 + Math.random() * 0.9);
+    p.style.width = p.style.height = size + 'px';
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    p.style.background = color;
+    if (opts.glow) p.style.boxShadow = '0 0 ' + cellSize * 0.3 + 'px ' + color;
+    const ang = opts.angle != null ? opts.angle + (Math.random() - 0.5) * spread : Math.random() * Math.PI * 2;
+    const dist = cellSize * (opts.dist || 1.2) * (0.5 + Math.random() * 0.8);
+    p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    p.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+    p.style.animationDuration = (opts.dur || 0.55) + 's';
+    ui.board.appendChild(p);
+    p.addEventListener('animationend', () => p.remove());
+  }
+}
+function ring(x, y, color, size, dur = 0.5) {
+  const r = document.createElement('div');
+  r.className = 'fx-ring';
+  r.style.left = x + 'px';
+  r.style.top = y + 'px';
+  r.style.width = r.style.height = size + 'px';
+  r.style.borderColor = color;
+  r.style.animationDuration = dur + 's';
+  ui.board.appendChild(r);
+  r.addEventListener('animationend', () => r.remove());
+}
+function emojiFx(x, y, ch, cls) {
+  const e = document.createElement('div');
+  e.className = 'emoji-fx' + (cls ? ' ' + cls : '');
+  e.textContent = ch;
+  e.style.left = x + 'px';
+  e.style.top = y + 'px';
+  e.style.fontSize = cellSize * 1.4 + 'px';
+  ui.board.appendChild(e);
+  e.addEventListener('animationend', () => e.remove());
+}
+function fxHammer(cell) {
+  const { x, y } = cellCenter(cell);
+  flashColor('#ffd166');
+  ring(x, y, '#ffd166', cellSize * 2.6, 0.4);
+  emit(x, y, '#ffdf80', 26, { size: 0.16, dist: 1.5, glow: true });
+  emit(x, y, '#ffffff', 10, { size: 0.12, dist: 2.0 });
+  emojiFx(x, y, '🔨', 'smash');
+  shakeScreen();
+}
+function fxBomb(cell) {
+  const { x, y } = cellCenter(cell);
+  flashColor('#ff6b4a');
+  ring(x, y, '#ff8a3d', cellSize * 3.2, 0.55);
+  emit(x, y, '#ff9f43', 30, { size: 0.18, dist: 2.2, glow: true, dur: 0.7 });
+  emit(x, y, '#ffd166', 16, { size: 0.14, dist: 1.6, dur: 0.6 });
+  emit(x, y, '#ffffff', 12, { size: 0.1, dist: 2.6, dur: 0.5 });
+  shakeScreen();
+}
+function fxRocket(cell, dir) {
+  const { x, y } = cellCenter(cell);
+  const horiz = dir === 'lineH';
+  for (let i = 0; i < 24; i++) {
+    const t = i / 24;
+    const px = horiz ? x - (t - 0.5) * cellSize * 8 : x;
+    const py = horiz ? y : y - (t - 0.5) * cellSize * 8;
+    emit(px, py, i % 2 ? '#ff9f43' : '#ffd166', 1, { angle: horiz ? Math.PI : -Math.PI / 2, spread: 0.6, dist: 0.8, size: 0.14, dur: 0.35 });
+  }
+  flashColor('#7ad0ff');
+  ring(x, y, '#7ad0ff', cellSize * 2.4, 0.45);
+  emojiFx(x, y, '🚀', 'rocketfly');
+  shakeScreen();
+}
+function fxRainbow() {
+  const w = ui.board.clientWidth, h = ui.board.clientHeight;
+  const colors = ['#ff5a76', '#ff9f43', '#feca57', '#2ecc71', '#4b7bec', '#a55eea'];
+  for (let i = 0; i < 40; i++) {
+    emit((Math.random() - 0.5) * w + w / 2, h + cellSize, colors[i % colors.length], 1, { angle: -Math.PI / 2, spread: 0.9, dist: 3.0, size: 0.16, dur: 0.9, glow: true });
+  }
+  flashColor('#ffffff');
+  ring(w / 2, h / 2, '#ffffff', cellSize * 3, 0.6);
+  shakeScreen();
+}
+function fxResource(label, color, ch) {
+  const x = ui.board.clientWidth / 2, y = ui.board.clientHeight / 2;
+  ring(x, y, color, cellSize * 2.6, 0.5);
+  emit(x, y, color, 22, { size: 0.14, dist: 1.8, glow: true });
+  const s = document.createElement('div');
+  s.className = 'scorefloat resource-fx';
+  s.textContent = ch + ' ' + label;
+  s.style.color = color;
+  s.style.left = x + 'px';
+  s.style.top = y + 'px';
+  ui.board.appendChild(s);
+  s.addEventListener('animationend', () => s.remove());
+}
+function fxDoubler() {
+  const w = ui.board.clientWidth, h = ui.board.clientHeight;
+  flashColor('#ffd166');
+  for (let i = 0; i < 36; i++) {
+    emit(Math.random() * w, -cellSize, i % 2 ? '#ffd166' : '#fff3c4', 1, { angle: Math.PI / 2, spread: 0.4, dist: 3.0, size: 0.16, dur: 1.1, glow: true });
+  }
+  ring(w / 2, h / 2, '#ffd166', cellSize * 3.4, 0.6);
+  ring(w / 2, h / 2, '#ffffff', cellSize * 2.6, 0.75);
+  shakeScreen();
+  if (ui.buff) { ui.buff.classList.remove('show'); void ui.buff.offsetWidth; ui.buff.classList.add('show'); }
+}
+
 async function animateClear(clear) {
   let waveColor = '#ffd166';
   let sawSpecial = null;
@@ -779,9 +920,16 @@ function activateDoubler() {
 
 function activateInstaBooster(b) {
   if (!consumeBooster(b)) return;
-  if (b === 'moves') { moves += 5; updateHud(); toast('步数 +5'); }
-  else if (b === 'time') { timeLeft += 10; updateHud(); toast('时间 +10 秒'); }
-  else if (b === 'doubler') { activateDoubler(); toast('双倍分数生效 15 秒！'); }
+  if (b === 'moves') {
+    moves += 5; updateHud(); toast('步数 +5');
+    sndMovesUp(); fxResource('步数+5', '#2ecc71', '➕');
+  } else if (b === 'time') {
+    timeLeft += 10; updateHud(); toast('时间 +10 秒');
+    sndTimeUp(); fxResource('时间+10s', '#7ad0ff', '⏱');
+  } else if (b === 'doubler') {
+    activateDoubler(); toast('双倍分数生效 15 秒！');
+    sndDoublerUp(); fxDoubler();
+  }
 }
 
 function resetBoosters() {
@@ -810,7 +958,6 @@ function consumeBooster(b) {
   updateBoosters();
   clearAim();
   haptic();
-  sndBooster();
   return true;
 }
 
@@ -820,8 +967,10 @@ function dropBooster() {
   const b = pool[rand(pool.length)];
   boosters[b]++;
   updateBoosters();
+  const btn = ui.boosters.querySelector(`[data-b="${b}"]`);
+  if (btn) { btn.classList.remove('boost-gain'); void btn.offsetWidth; btn.classList.add('boost-gain'); }
   toast(BOOSTERS[b].icon + ' 获得 ' + BOOSTERS[b].label + '！');
-  sndSpawn();
+  sndBoosterDrop();
 }
 
 function maybeDropBooster(clearSize, comboCount) {
@@ -846,8 +995,9 @@ async function useHammer(cell) {
   const g = grid[cell.r][cell.c];
   if (!g) return;
   if (!consumeBooster('hammer')) return;
+  sndHammer();
+  fxHammer(cell);
   const { clear } = computeClearEffect(new Set([key(cell)]));
-  sndSpecialFire('bomb');
   await animateClear(clear);
   await settleBoost(clear);
 }
@@ -856,6 +1006,8 @@ async function useBomb(cell) {
   const g = grid[cell.r][cell.c];
   if (!g) return;
   if (!consumeBooster('bomb')) return;
+  sndBombBlast();
+  fxBomb(cell);
   const seed = new Set();
   for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
     const rr = cell.r + dr, cc = cell.c + dc;
@@ -872,7 +1024,7 @@ async function useRocket(cell) {
   if (!consumeBooster('rocket')) return;
   const dir = Math.random() < 0.5 ? 'lineH' : 'lineV';
   g.special = dir; g.frozen = false; g.locked = false;
-  showBanner(dir); sndSpawn();
+  showBanner(dir); sndRocketLaunch(); fxRocket(cell, dir);
   const { clear } = computeClearEffect(new Set([key(cell)]));
   await animateClear(clear);
   await settleBoost(clear);
@@ -883,7 +1035,7 @@ async function useRainbow(cell) {
   if (!isGem(g) || g.stone) { toast('只能对糖果使用'); return; }
   if (!consumeBooster('rainbow')) return;
   g.special = 'rainbow'; g.frozen = false; g.locked = false;
-  showBanner('rainbow'); sndSpawn();
+  showBanner('rainbow'); sndRainbowBoost(); fxRainbow();
   const { clear } = computeClearEffect(new Set([key(cell)]));
   await animateClear(clear);
   await settleBoost(clear);
