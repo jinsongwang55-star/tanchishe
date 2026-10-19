@@ -891,6 +891,7 @@ function bind() {
   ui.hudTarget = document.getElementById('hud-target');
   ui.targets = document.getElementById('targets');
   ui.combo = document.getElementById('combo');
+  ui.banner = document.getElementById('banner');
   ui.tip = document.getElementById('tip');
   ui.toast = document.getElementById('toast');
   ui.overlay = document.getElementById('overlay');
