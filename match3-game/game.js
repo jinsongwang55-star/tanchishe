@@ -11,6 +11,7 @@ const SPECIAL_META = {
   bomb: { label: '炸弹', icon: '💣' },
   rainbow: { label: '彩虹', icon: '🌈' }
 };
+const SPECIAL_COLORS = { lineH: '#7ad0ff', lineV: '#7ad0ff', bomb: '#ff6b6b', rainbow: '#ffffff' };
 const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 const CLEAR_MS = 230, FALL_MS = 210;
 
@@ -42,6 +43,8 @@ let collectRemain = [];
 let lastSwapA = null, lastSwapB = null;
 let sel = null;
 let drag = null;
+let musicTimer = null, musicStep = 0;
+let scoreShown = 0;
 let muted = localStorage.getItem('m3_muted') === '1';
 
 const ui = {};
@@ -52,6 +55,7 @@ const key = p => p.r + ',' + p.c;
 const isGem = g => !!g && !g.stone;
 const rand = n => Math.floor(Math.random() * n);
 const shuffleArr = a => { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const haptic = () => { try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {} };
 
 const mkGem = type => ({ id: ++gid, type, special: null, frozen: false, locked: false });
 const mkStone = () => ({ id: ++gid, stone: true });
@@ -93,7 +97,12 @@ function noiseBurst(dur = 0.3, vol = 0.15) {
 }
 const sndSwap = () => beep(300, 0.08, 'triangle', 0.08);
 const sndFail = () => beep(140, 0.15, 'sawtooth', 0.06);
-const sndMatch = c => { beep(420 + c * 55, 0.14, 'sine', 0.12); beep(420 + c * 55, 0.14, 'sine', 0.08, 0.03); };
+const sndMatch = c => {
+  const base = 420 + c * 60;
+  beep(base, 0.14, 'sine', 0.12);
+  beep(base, 0.14, 'sine', 0.08, 0.03);
+  if (c > 0) { beep(base * 1.25, 0.12, 'triangle', 0.07, 0.05); beep(base * 1.5, 0.14, 'triangle', 0.06, 0.1); }
+};
 const sndSpecialFire = sp => {
   if (sp === 'bomb') { noiseBurst(0.3, 0.18); beep(120, 0.28, 'sawtooth', 0.12); }
   else if (sp === 'rainbow') { [660, 780, 990, 1320, 1650].forEach((f, i) => beep(f, 0.14, 'sine', 0.09, i * 0.045)); }
@@ -109,6 +118,24 @@ const sndCountdown = () => { beep(880, 0.07, 'square', 0.08); beep(880, 0.07, 's
 const sndCollect = () => { beep(660, 0.1, 'sine', 0.1); beep(880, 0.15, 'sine', 0.09, 0.07); };
 const sndWin = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.22, 'sine', 0.12, i * 0.12));
 const sndLose = () => [400, 330, 260, 200].forEach((f, i) => beep(f, 0.25, 'sine', 0.1, i * 0.13));
+
+/* ================= 背景音乐 ================= */
+const MUSIC = [261.63, 329.63, 392.0, 523.25];
+function startMusic() {
+  if (musicTimer || muted) return;
+  ensureCtx();
+  if (!ac) return;
+  musicStep = 0;
+  musicTimer = setInterval(() => {
+    if (muted || !ac) return;
+    const f = MUSIC[musicStep % MUSIC.length];
+    beep(f, 0.45, 'sine', 0.03);
+    if (musicStep % 4 === 0) beep(130.81, 1.0, 'triangle', 0.045);
+    if (musicStep % 2 === 0) beep(f * 2, 0.3, 'sine', 0.015);
+    musicStep++;
+  }, 460);
+}
+function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; } }
 
 /* ================= 棋盘生成 ================= */
 function randomTypeFor(r, c) {
@@ -425,7 +452,30 @@ function spawnScoreFloat(clear, val) {
   s.addEventListener('animationend', () => s.remove());
 }
 
+function spawnShockwave(clear, color) {
+  const { x, y } = clearCenter(clear);
+  const w = document.createElement('div');
+  w.className = 'shockwave';
+  w.style.left = x + 'px';
+  w.style.top = y + 'px';
+  const size = cellSize * (1.8 + Math.sqrt(clear.size) * 0.7);
+  w.style.width = w.style.height = size + 'px';
+  w.style.borderColor = color;
+  ui.board.appendChild(w);
+  w.addEventListener('animationend', () => w.remove());
+}
+
+function flashBoard(sp) {
+  const f = document.createElement('div');
+  f.className = 'flash';
+  f.style.background = 'radial-gradient(circle, rgba(255,255,255,.95) 0%, ' + (SPECIAL_COLORS[sp] || '#ffffff') + ' 45%, transparent 78%)';
+  ui.board.appendChild(f);
+  f.addEventListener('animationend', () => f.remove());
+}
+
 async function animateClear(clear) {
+  let waveColor = '#ffd166';
+  let sawSpecial = null;
   for (const k of clear) {
     const [r, c] = k.split(',').map(Number);
     const g = grid[r][c];
@@ -434,11 +484,14 @@ async function animateClear(clear) {
     if (el) {
       el.classList.add('poof');
       spawnParticles(el, g);
-      if (g.special) sndSpecialFire(g.special);
+      if (!g.stone) waveColor = GEM_COLORS[g.type];
+      if (g.special) { sndSpecialFire(g.special); sawSpecial = g.special; }
       else if (g.locked) sndLockBreak();
       else if (g.frozen) sndIceBreak();
     }
   }
+  spawnShockwave(clear, waveColor);
+  if (sawSpecial) flashBoard(sawSpecial);
   await sleep(CLEAR_MS);
   for (const k of clear) {
     const [r, c] = k.split(',').map(Number);
@@ -689,13 +742,35 @@ function doHint() {
 }
 
 /* ================= HUD / UI ================= */
+function setScore(v) {
+  if (ui.hScore._raf) cancelAnimationFrame(ui.hScore._raf);
+  ui.hScore.classList.remove('pop');
+  void ui.hScore.offsetWidth;
+  ui.hScore.classList.add('pop');
+  const from = scoreShown;
+  const start = performance.now();
+  const dur = 320;
+  const step = now => {
+    const p = Math.min(1, (now - start) / dur);
+    const e = 1 - Math.pow(1 - p, 3);
+    scoreShown = Math.round(from + (v - from) * e);
+    ui.hScore.textContent = scoreShown;
+    if (p < 1) ui.hScore._raf = requestAnimationFrame(step);
+  };
+  ui.hScore._raf = requestAnimationFrame(step);
+}
+
 function updateHud() {
-  ui.hScore.textContent = score;
+  setScore(score);
   if (mode !== 'rush') ui.hMoves.textContent = moves;
   if (mode === 'rush') {
     ui.hTime.textContent = timeLeft;
     ui.hTime.classList.toggle('low', timeLeft <= 5 && timeLeft >= 0);
   }
+}
+
+function updateBest() {
+  if (ui.hBest) ui.hBest.textContent = +(localStorage.getItem('m3_best_' + mode) || 0);
 }
 
 function renderTargets() {
@@ -769,6 +844,8 @@ function saveBest() {
   const k = 'm3_best_' + mode;
   const prev = +(localStorage.getItem(k) || 0);
   if (score > prev) localStorage.setItem(k, String(score));
+  updateBest();
+  if (ui.resultBest) ui.resultBest.textContent = '🏆 最高纪录 ' + (+(localStorage.getItem(k) || 0));
 }
 
 function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
@@ -779,7 +856,9 @@ function startGame(m) {
   stopTimer();
   gameOver = false; busy = false;
   score = 0; level = (m === 'trial') ? level : 1;
-  sel = null; lastSwapA = lastSwapB = null;
+  sel = null; drag = null; lastSwapA = lastSwapB = null;
+  scoreShown = 0;
+  if (ui.resultBest) ui.resultBest.textContent = '';
   els.forEach(el => el.remove()); els.clear();
 
   let opts = {};
@@ -816,6 +895,7 @@ function startGame(m) {
   ui.overlay.classList.remove('show');
   ui.btnNext.style.display = 'none';
   setActiveModeBtn(m);
+  updateBest();
   renderTargets();
   updateHud();
   render();
@@ -868,9 +948,12 @@ function onPointerDown(e) {
   const cell = cellFromEvent(pos.x, pos.y);
   if (!cell) return;
   const g = grid[cell.r][cell.c];
-  if (!g || g.stone) { clearSel(); return; }
-  drag = { r: cell.r, c: cell.c, x: pos.x, y: pos.y };
-  setSel(cell);
+  if (!g || g.stone) return;
+  const el = els.get(g.id);
+  drag = { r: cell.r, c: cell.c, x: pos.x, y: pos.y, el };
+  if (el) el.classList.add('dragging');
+  sndClick();
+  startMusic();
   try { ui.board.setPointerCapture(e.pointerId); } catch (_) {}
 }
 
@@ -879,26 +962,30 @@ function onPointerMove(e) {
   e.preventDefault();
   const pos = pointerPos(e);
   const dx = pos.x - drag.x, dy = pos.y - drag.y;
-  const threshold = cellSize * 0.3;
+  if (drag.el) drag.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+}
+
+function finishDrag(e, commit) {
+  const d = drag;
+  if (!d) return;
+  drag = null;
+  if (d.el) { d.el.classList.remove('dragging'); d.el.style.transform = ''; }
+  if (!commit) return;
+  const pos = pointerPos(e);
+  const dx = pos.x - d.x, dy = pos.y - d.y;
+  const threshold = cellSize * 0.35;
   if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
   let dr = 0, dc = 0;
   if (Math.abs(dx) > Math.abs(dy)) dc = dx > 0 ? 1 : -1;
   else dr = dy > 0 ? 1 : -1;
-  const nr = drag.r + dr, nc = drag.c + dc;
-  const from = { r: drag.r, c: drag.c };
-  drag = null;
-  clearSel();
+  const nr = d.r + dr, nc = d.c + dc;
   if (nr < 0 || nc < 0 || nr >= ROWS || nc >= COLS) return;
-  attemptMove(from, { r: nr, c: nc });
+  haptic();
+  attemptMove({ r: d.r, c: d.c }, { r: nr, c: nc });
 }
 
-function onPointerUp(e) {
-  if (drag) { drag = null; clearSel(); }
-}
-
-function onPointerCancel(e) {
-  if (drag) { drag = null; clearSel(); }
-}
+function onPointerUp(e) { finishDrag(e, true); }
+function onPointerCancel(e) { finishDrag(e, false); }
 
 /* ================= 初始化 ================= */
 function bind() {
@@ -921,6 +1008,8 @@ function bind() {
   ui.resultTitle = document.getElementById('result-title');
   ui.resultScore = document.getElementById('result-score');
   ui.resultSub = document.getElementById('result-sub');
+  ui.hBest = document.getElementById('h-best');
+  ui.resultBest = document.getElementById('result-best');
   ui.btnAgain = document.getElementById('btn-again');
   ui.btnNext = document.getElementById('btn-next');
 
