@@ -12,6 +12,13 @@ const SPECIAL_META = {
   rainbow: { label: '彩虹', icon: '🌈' }
 };
 const SPECIAL_COLORS = { lineH: '#7ad0ff', lineV: '#7ad0ff', bomb: '#ff6b6b', rainbow: '#ffffff' };
+const BOOSTERS = {
+  hammer: { icon: '🔨', label: '爆破锤' },
+  bomb: { icon: '💣', label: '炸弹' },
+  rocket: { icon: '🎯', label: '瞄准火箭' },
+  rainbow: { icon: '🌈', label: '彩虹球' }
+};
+const BOOSTER_KEYS = Object.keys(BOOSTERS);
 const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 const CLEAR_MS = 230, FALL_MS = 210;
 
@@ -46,6 +53,8 @@ let drag = null;
 let musicTimer = null, musicStep = 0;
 let scoreShown = 0;
 let muted = localStorage.getItem('m3_muted') === '1';
+let boosters = { hammer: 0, bomb: 0, rocket: 0, rainbow: 0 };
+let aiming = null;
 
 const ui = {};
 
@@ -118,6 +127,7 @@ const sndCountdown = () => { beep(880, 0.07, 'square', 0.08); beep(880, 0.07, 's
 const sndCollect = () => { beep(660, 0.1, 'sine', 0.1); beep(880, 0.15, 'sine', 0.09, 0.07); };
 const sndWin = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.22, 'sine', 0.12, i * 0.12));
 const sndLose = () => [400, 330, 260, 200].forEach((f, i) => beep(f, 0.25, 'sine', 0.1, i * 0.13));
+const sndBooster = () => { beep(620, 0.08, 'triangle', 0.1); beep(930, 0.12, 'triangle', 0.08, 0.06); };
 
 /* ================= 背景音乐 ================= */
 const MUSIC = [261.63, 329.63, 392.0, 523.25];
@@ -552,6 +562,7 @@ async function resolve(initialSeed = null) {
     score += gained;
     updateHud();
     spawnScoreFloat(clear, gained);
+    maybeDropBooster(clear.size, combo);
     seed = null;
   }
   lastSwapA = lastSwapB = null;
@@ -711,6 +722,135 @@ async function ensureMoves() {
   await sleep(300);
 }
 
+/* ================= 道具系统 ================= */
+function updateBoosters() {
+  for (const k of BOOSTER_KEYS) {
+    const btn = ui.boosters.querySelector(`[data-b="${k}"]`);
+    if (!btn) continue;
+    btn.querySelector('.n').textContent = boosters[k];
+    btn.classList.toggle('empty', boosters[k] <= 0);
+  }
+}
+
+function clearAim() {
+  aiming = null;
+  document.querySelectorAll('.booster').forEach(x => x.classList.remove('aiming'));
+  if (ui.board) ui.board.classList.remove('aiming');
+}
+
+function resetBoosters() {
+  boosters = { hammer: 2, bomb: 2, rocket: 2, rainbow: 2 };
+  clearAim();
+  updateBoosters();
+}
+
+function toggleAim(b) {
+  if (busy || gameOver || !running) return;
+  if (boosters[b] <= 0) { toast('道具数量不足'); return; }
+  if (aiming === b) { clearAim(); return; }
+  clearAim();
+  aiming = b;
+  ui.boosters.querySelector(`[data-b="${b}"]`).classList.add('aiming');
+  ui.board.classList.add('aiming');
+  sndClick();
+}
+
+function consumeBooster(b) {
+  if (boosters[b] <= 0) return false;
+  boosters[b]--;
+  updateBoosters();
+  clearAim();
+  haptic();
+  sndBooster();
+  return true;
+}
+
+function dropBooster() {
+  const b = BOOSTER_KEYS[rand(BOOSTER_KEYS.length)];
+  boosters[b]++;
+  updateBoosters();
+  toast(BOOSTERS[b].icon + ' 获得 ' + BOOSTERS[b].label + '！');
+  sndSpawn();
+}
+
+function maybeDropBooster(clearSize, comboCount) {
+  let chance = 0;
+  if (clearSize >= 8) chance = 1;
+  else if (clearSize >= 6) chance = 0.7;
+  else if (comboCount >= 3) chance = 0.5;
+  if (chance > 0 && Math.random() < chance) dropBooster();
+}
+
+async function settleBoost(clear) {
+  score += clear.size * 15;
+  updateHud();
+  spawnScoreFloat(clear, clear.size * 15);
+  applyGravityAndRefill();
+  render();
+  await sleep(FALL_MS);
+  await resolve();
+}
+
+async function useHammer(cell) {
+  const g = grid[cell.r][cell.c];
+  if (!g) return;
+  if (!consumeBooster('hammer')) return;
+  const { clear } = computeClearEffect(new Set([key(cell)]));
+  sndSpecialFire('bomb');
+  await animateClear(clear);
+  await settleBoost(clear);
+}
+
+async function useBomb(cell) {
+  const g = grid[cell.r][cell.c];
+  if (!g) return;
+  if (!consumeBooster('bomb')) return;
+  const seed = new Set();
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    const rr = cell.r + dr, cc = cell.c + dc;
+    if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) seed.add(key({ r: rr, c: cc }));
+  }
+  const { clear } = computeClearEffect(seed);
+  await animateClear(clear);
+  await settleBoost(clear);
+}
+
+async function useRocket(cell) {
+  const g = grid[cell.r][cell.c];
+  if (!isGem(g) || g.stone) { toast('只能对糖果使用'); return; }
+  if (!consumeBooster('rocket')) return;
+  const dir = Math.random() < 0.5 ? 'lineH' : 'lineV';
+  g.special = dir; g.frozen = false; g.locked = false;
+  showBanner(dir); sndSpawn();
+  const { clear } = computeClearEffect(new Set([key(cell)]));
+  await animateClear(clear);
+  await settleBoost(clear);
+}
+
+async function useRainbow(cell) {
+  const g = grid[cell.r][cell.c];
+  if (!isGem(g) || g.stone) { toast('只能对糖果使用'); return; }
+  if (!consumeBooster('rainbow')) return;
+  g.special = 'rainbow'; g.frozen = false; g.locked = false;
+  showBanner('rainbow'); sndSpawn();
+  const { clear } = computeClearEffect(new Set([key(cell)]));
+  await animateClear(clear);
+  await settleBoost(clear);
+}
+
+async function fireBooster(b, cell) {
+  busy = true;
+  try {
+    if (b === 'hammer') await useHammer(cell);
+    else if (b === 'bomb') await useBomb(cell);
+    else if (b === 'rocket') await useRocket(cell);
+    else if (b === 'rainbow') await useRainbow(cell);
+    evaluateEnd();
+  } finally {
+    busy = false;
+  }
+}
+
 /* ================= 提示 ================= */
 function findHint() {
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -858,6 +998,7 @@ function startGame(m) {
   score = 0; level = (m === 'trial') ? level : 1;
   sel = null; drag = null; lastSwapA = lastSwapB = null;
   scoreShown = 0;
+  resetBoosters();
   if (ui.resultBest) ui.resultBest.textContent = '';
   els.forEach(el => el.remove()); els.clear();
 
@@ -947,6 +1088,12 @@ function onPointerDown(e) {
   const pos = pointerPos(e);
   const cell = cellFromEvent(pos.x, pos.y);
   if (!cell) return;
+  if (aiming) {
+    const b = aiming;
+    clearAim();
+    fireBooster(b, cell);
+    return;
+  }
   const g = grid[cell.r][cell.c];
   if (!g || g.stone) return;
   const el = els.get(g.id);
@@ -1012,10 +1159,12 @@ function bind() {
   ui.resultBest = document.getElementById('result-best');
   ui.btnAgain = document.getElementById('btn-again');
   ui.btnNext = document.getElementById('btn-next');
+  ui.boosters = document.getElementById('boosters');
 
   document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => { level = 1; startGame(b.dataset.mode); }));
   ui.btnAgain.addEventListener('click', restartModes);
   ui.btnNext.addEventListener('click', nextLevel);
+  document.querySelectorAll('.booster').forEach(b => b.addEventListener('click', () => toggleAim(b.dataset.b)));
   document.getElementById('btn-hint').addEventListener('click', doHint);
   document.getElementById('btn-restart').addEventListener('click', restartModes);
   document.getElementById('btn-mute').addEventListener('click', () => {

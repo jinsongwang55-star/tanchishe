@@ -61,6 +61,26 @@ h1{
 .hud .v.time.low{color:#ff5a5a;animation:blink .5s steps(1) infinite;}
 @keyframes blink{50%{opacity:.35;}}
 
+/* 道具栏 */
+.boosters{
+  display:flex;gap:10px;justify-content:center;align-items:stretch;
+}
+.booster{
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  flex:1;max-width:76px;padding:8px 0;border-radius:12px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--panel-border);color:var(--text);
+  transition:transform .15s,background .15s,box-shadow .15s;
+}
+.booster .ic{font-size:22px;line-height:1;}
+.booster .n{font-size:12px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1;}
+.booster:hover{transform:translateY(-2px);background:rgba(255,255,255,.14);}
+.booster.aiming{
+  background:linear-gradient(135deg,rgba(255,122,217,.32),rgba(122,208,255,.32));
+  border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset,0 0 16px rgba(255,122,217,.5);
+}
+.booster.empty{opacity:.45;filter:grayscale(.4);}
+#board.aiming{cursor:crosshair;}
+
 /* 收集目标 */
 .targets{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .target{
