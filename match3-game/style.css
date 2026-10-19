@@ -63,11 +63,11 @@ h1{
 
 /* 道具栏 */
 .boosters{
-  display:flex;gap:10px;justify-content:center;align-items:stretch;
+  display:flex;gap:8px;justify-content:center;align-items:stretch;flex-wrap:wrap;
 }
 .booster{
   position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  flex:1;max-width:76px;padding:8px 0;border-radius:12px;cursor:pointer;
+  width:60px;padding:8px 0;border-radius:12px;cursor:pointer;
   background:var(--panel);border:1px solid var(--panel-border);color:var(--text);
   transition:transform .15s,background .15s,box-shadow .15s;
 }
@@ -80,6 +80,22 @@ h1{
 }
 .booster.empty{opacity:.45;filter:grayscale(.4);}
 #board.aiming{cursor:crosshair;}
+
+/* buff 指示器 */
+#buff{
+  position:absolute;left:50%;top:-12px;transform:translateX(-50%);
+  background:linear-gradient(135deg,#ffd166,#ff7a6b);
+  color:#3a1a06;font-weight:800;font-size:13px;padding:4px 12px;border-radius:999px;
+  pointer-events:none;opacity:0;z-index:12;white-space:nowrap;
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+#buff.show{opacity:1;animation:scorepop .3s ease;}
+
+/* 双倍分数飘字 */
+.scorefloat.doubler{
+  color:#fff;
+  text-shadow:0 0 8px var(--gold),0 1px 3px rgba(0,0,0,.7);
+}
 
 /* 收集目标 */
 .targets{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}

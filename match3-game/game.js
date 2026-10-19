@@ -16,7 +16,10 @@ const BOOSTERS = {
   hammer: { icon: '🔨', label: '爆破锤' },
   bomb: { icon: '💣', label: '炸弹' },
   rocket: { icon: '🎯', label: '瞄准火箭' },
-  rainbow: { icon: '🌈', label: '彩虹球' }
+  rainbow: { icon: '🌈', label: '彩虹球' },
+  moves: { icon: '➕', label: '加步数', instant: true },
+  time: { icon: '⏱', label: '加时器', instant: true },
+  doubler: { icon: '✨', label: '双倍分数', instant: true }
 };
 const BOOSTER_KEYS = Object.keys(BOOSTERS);
 const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
@@ -55,6 +58,7 @@ let scoreShown = 0;
 let muted = localStorage.getItem('m3_muted') === '1';
 let boosters = { hammer: 0, bomb: 0, rocket: 0, rainbow: 0 };
 let aiming = null;
+let doublerUntil = 0, doublerTimer = null;
 
 const ui = {};
 
@@ -454,7 +458,7 @@ function spawnParticles(el, g) {
 function spawnScoreFloat(clear, val) {
   const { x, y } = clearCenter(clear);
   const s = document.createElement('div');
-  s.className = 'scorefloat';
+  s.className = 'scorefloat' + (isDoublerActive() ? ' doubler' : '');
   s.textContent = '+' + val;
   s.style.left = x + 'px';
   s.style.top = y + 'px';
@@ -559,9 +563,9 @@ async function resolve(initialSeed = null) {
     await sleep(FALL_MS);
     combo++;
     const gained = clear.size * 10 * combo;
-    score += gained;
+    const actual = addScore(gained);
     updateHud();
-    spawnScoreFloat(clear, gained);
+    spawnScoreFloat(clear, actual);
     maybeDropBooster(clear.size, combo);
     seed = null;
   }
@@ -622,7 +626,7 @@ async function doSpecialCombo(a, b, ga, gb) {
   applyGravityAndRefill();
   render();
   await sleep(FALL_MS);
-  score += clear.size * 15;
+  addScore(clear.size * 15);
   updateHud();
   await resolve();
 }
@@ -639,7 +643,7 @@ async function rainbowWith(rainCell, otherCell, other) {
   applyGravityAndRefill();
   render();
   await sleep(FALL_MS);
-  score += clear.size * 15;
+  addScore(clear.size * 15);
   updateHud();
   await resolve();
 }
@@ -738,15 +742,60 @@ function clearAim() {
   if (ui.board) ui.board.classList.remove('aiming');
 }
 
+function boosterUsable(k) {
+  if (k === 'moves' && mode === 'rush') return false;
+  if (k === 'time' && mode !== 'rush') return false;
+  return true;
+}
+
+function isDoublerActive() {
+  return doublerUntil > 0 && Date.now() < doublerUntil;
+}
+
+function addScore(n) {
+  const mult = isDoublerActive() ? 2 : 1;
+  score += n * mult;
+  return n * mult;
+}
+
+function stopDoubler() {
+  if (doublerTimer) { clearInterval(doublerTimer); doublerTimer = null; }
+  doublerUntil = 0;
+  if (ui.buff) ui.buff.classList.remove('show');
+}
+
+function updateBuff() {
+  const left = Math.ceil((doublerUntil - Date.now()) / 1000);
+  if (left <= 0) { stopDoubler(); return; }
+  if (ui.buff) { ui.buff.textContent = '✨ 双倍分数 ' + left + 's'; ui.buff.classList.add('show'); }
+}
+
+function activateDoubler() {
+  doublerUntil = Date.now() + 15000;
+  if (doublerTimer) clearInterval(doublerTimer);
+  updateBuff();
+  doublerTimer = setInterval(updateBuff, 250);
+}
+
+function activateInstaBooster(b) {
+  if (!consumeBooster(b)) return;
+  if (b === 'moves') { moves += 5; updateHud(); toast('步数 +5'); }
+  else if (b === 'time') { timeLeft += 10; updateHud(); toast('时间 +10 秒'); }
+  else if (b === 'doubler') { activateDoubler(); toast('双倍分数生效 15 秒！'); }
+}
+
 function resetBoosters() {
-  boosters = { hammer: 2, bomb: 2, rocket: 2, rainbow: 2 };
+  boosters = { hammer: 2, bomb: 2, rocket: 2, rainbow: 2, moves: 2, time: 2, doubler: 2 };
+  stopDoubler();
   clearAim();
   updateBoosters();
 }
 
 function toggleAim(b) {
   if (busy || gameOver || !running) return;
+  if (!boosterUsable(b)) { toast('当前模式不可用'); return; }
   if (boosters[b] <= 0) { toast('道具数量不足'); return; }
+  if (BOOSTERS[b].instant) { activateInstaBooster(b); return; }
   if (aiming === b) { clearAim(); return; }
   clearAim();
   aiming = b;
@@ -766,7 +815,9 @@ function consumeBooster(b) {
 }
 
 function dropBooster() {
-  const b = BOOSTER_KEYS[rand(BOOSTER_KEYS.length)];
+  const pool = BOOSTER_KEYS.filter(boosterUsable);
+  if (!pool.length) return;
+  const b = pool[rand(pool.length)];
   boosters[b]++;
   updateBoosters();
   toast(BOOSTERS[b].icon + ' 获得 ' + BOOSTERS[b].label + '！');
@@ -782,9 +833,9 @@ function maybeDropBooster(clearSize, comboCount) {
 }
 
 async function settleBoost(clear) {
-  score += clear.size * 15;
+  const gained = addScore(clear.size * 15);
   updateHud();
-  spawnScoreFloat(clear, clear.size * 15);
+  spawnScoreFloat(clear, gained);
   applyGravityAndRefill();
   render();
   await sleep(FALL_MS);
@@ -1160,6 +1211,7 @@ function bind() {
   ui.btnAgain = document.getElementById('btn-again');
   ui.btnNext = document.getElementById('btn-next');
   ui.boosters = document.getElementById('boosters');
+  ui.buff = document.getElementById('buff');
 
   document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => { level = 1; startGame(b.dataset.mode); }));
   ui.btnAgain.addEventListener('click', restartModes);
