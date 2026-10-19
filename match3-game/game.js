@@ -1,7 +1,7 @@
 'use strict';
 
 /* ================= 常量与配置 ================= */
-const ROWS = 8, COLS = 8, N = 6;
+const ROWS = 10, COLS = 10, N = 6;
 const GEMS = ['🍓', '🍊', '🍇', '🍏', '🍋', '🫐'];
 const GEM_NAMES = ['草莓', '橙子', '葡萄', '青苹果', '柠檬', '蓝莓'];
 const GEM_COLORS = ['#ff5a76', '#ff9f43', '#a55eea', '#2ecc71', '#feca57', '#4b7bec'];
@@ -26,10 +26,10 @@ const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 const CLEAR_MS = 230, FALL_MS = 210;
 
 const MODES = {
-  classic: { name: '经典模式', moves: 24, target: 3000 },
+  classic: { name: '经典模式', moves: 26, target: 4000 },
   rush: { name: '限时模式', time: 60 },
-  collect: { name: '收集模式', moves: 22 },
-  trial: { name: '挑战模式', moves: 22 },
+  collect: { name: '收集模式', moves: 24 },
+  trial: { name: '挑战模式', moves: 26 },
   infinite: { name: '无限模式' }
 };
 
@@ -411,11 +411,12 @@ function createGemEl() {
 }
 
 function syncEl(el, g, r, c) {
-  const size = cellSize - 6;
+  const gap = Math.max(3, Math.round(cellSize * 0.1));
+  const size = cellSize - gap;
   el.style.width = size + 'px';
   el.style.height = size + 'px';
-  el.style.left = (c * cellSize + 3) + 'px';
-  el.style.top = (r * cellSize + 3) + 'px';
+  el.style.left = (c * cellSize + gap / 2) + 'px';
+  el.style.top = (r * cellSize + gap / 2) + 'px';
   let cls = 'cell';
   if (g.stone) cls += ' stone';
   else {
@@ -624,8 +625,8 @@ function fxRocket(cell, dir) {
   const horiz = dir === 'lineH';
   for (let i = 0; i < 24; i++) {
     const t = i / 24;
-    const px = horiz ? x - (t - 0.5) * cellSize * 8 : x;
-    const py = horiz ? y : y - (t - 0.5) * cellSize * 8;
+    const px = horiz ? x - (t - 0.5) * cellSize * COLS : x;
+    const py = horiz ? y : y - (t - 0.5) * cellSize * ROWS;
     emit(px, py, i % 2 ? '#ff9f43' : '#ffd166', 1, { angle: horiz ? Math.PI : -Math.PI / 2, spread: 0.6, dist: 0.8, size: 0.14, dur: 0.35 });
   }
   flashColor('#7ad0ff');
