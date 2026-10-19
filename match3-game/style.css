@@ -181,6 +181,8 @@ h1{
 .cell.locked{box-shadow:0 0 0 3px var(--gold),0 0 16px rgba(255,180,0,.75);}
 .cell.special{animation:glow 1.2s ease-in-out infinite;}
 .cell.sel{outline:3px solid #fff;outline-offset:0;z-index:5;transform:none;box-shadow:0 0 0 3px var(--gold),0 0 18px var(--gold);}
+.cell.hint{outline:3px solid #ffd166;outline-offset:1px;z-index:4;animation:hintPulse .8s ease-in-out infinite;}
+@keyframes hintPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
 
 @keyframes glow{
   0%,100%{filter:brightness(1);}

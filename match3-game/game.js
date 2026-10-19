@@ -60,6 +60,7 @@ let muted = localStorage.getItem('m3_muted') === '1';
 let boosters = { hammer: 0, bomb: 0, rocket: 0, rainbow: 0 };
 let aiming = null;
 let doublerUntil = 0, doublerTimer = null;
+let hintTimer = null, hintEls = [];
 
 const ui = {};
 
@@ -884,6 +885,7 @@ async function attemptMove(a, b) {
   }
   busy = false;
   if (!gameOver && ok) await ensureMoves();
+  scheduleAutoHint();
 }
 
 /* ================= 无路可走时洗牌 ================= */
@@ -1000,11 +1002,13 @@ function resetBoosters() {
 
 function toggleAim(b) {
   if (busy || gameOver || !running) return;
+  clearAutoHint(); clearHint();
   if (!boosterUsable(b)) { toast('当前模式不可用'); return; }
   if (boosters[b] <= 0) { toast('道具数量不足'); return; }
-  if (BOOSTERS[b].instant) { activateInstaBooster(b); return; }
-  if (aiming === b) { clearAim(); return; }
+  if (BOOSTERS[b].instant) { activateInstaBooster(b); scheduleAutoHint(); return; }
+  if (aiming === b) { clearAim(); scheduleAutoHint(); return; }
   clearAim();
+  clearHint();
   aiming = b;
   ui.boosters.querySelector(`[data-b="${b}"]`).classList.add('aiming');
   ui.board.classList.add('aiming');
@@ -1112,6 +1116,7 @@ async function fireBooster(b, cell) {
   } finally {
     busy = false;
   }
+  scheduleAutoHint();
 }
 
 /* ================= 提示 ================= */
@@ -1133,15 +1138,34 @@ function findHint() {
   return null;
 }
 
+function clearHint() {
+  hintEls.forEach(el => el.classList.remove('hint'));
+  hintEls = [];
+}
+
 function doHint() {
   if (busy || gameOver || !running) return;
   const h = findHint();
-  if (!h) { toast('没有可走的路'); return; }
+  if (!h) { clearHint(); return; }
   const [a, b] = h;
   const ea = els.get(grid[a.r][a.c].id), eb = els.get(grid[b.r][b.c].id);
-  if (ea) ea.classList.add('sel');
-  if (eb) eb.classList.add('sel');
-  setTimeout(() => { if (ea) ea.classList.remove('sel'); if (eb) eb.classList.remove('sel'); }, 900);
+  clearHint();
+  if (ea) { ea.classList.add('hint'); hintEls.push(ea); }
+  if (eb) { eb.classList.add('hint'); hintEls.push(eb); }
+}
+
+function clearAutoHint() {
+  if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+}
+
+// 棋盘静止 1 秒未消除则自动提示下一步
+function scheduleAutoHint() {
+  clearAutoHint();
+  if (!running || gameOver) return;
+  hintTimer = setTimeout(() => {
+    if (busy || gameOver || !running || drag || aiming) return;
+    doHint();
+  }, 1000);
 }
 
 /* ================= HUD / UI ================= */
@@ -1308,6 +1332,7 @@ function startGame(m) {
   ui.tip.textContent = (m === 'infinite') ? '无限步数随意玩，打出连击即可获得道具奖励！' : '按住糖果向上下左右拖动，交换位置凑成 3 个以上即可消除';
   render();
   running = true;
+  scheduleAutoHint();
 
   if (m === 'rush') {
     timerId = setInterval(() => {
@@ -1355,6 +1380,7 @@ function onPointerDown(e) {
   const pos = pointerPos(e);
   const cell = cellFromEvent(pos.x, pos.y);
   if (!cell) return;
+  clearAutoHint(); clearHint();
   if (aiming) {
     const b = aiming;
     clearAim();
@@ -1433,7 +1459,7 @@ function bind() {
   ui.btnAgain.addEventListener('click', restartModes);
   ui.btnNext.addEventListener('click', nextLevel);
   document.querySelectorAll('.booster').forEach(b => b.addEventListener('click', () => toggleAim(b.dataset.b)));
-  document.getElementById('btn-hint').addEventListener('click', doHint);
+  document.getElementById('btn-hint').addEventListener('click', () => { clearAutoHint(); doHint(); scheduleAutoHint(); });
   document.getElementById('btn-restart').addEventListener('click', restartModes);
   document.getElementById('btn-mute').addEventListener('click', () => {
     muted = !muted;
