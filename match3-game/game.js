@@ -29,7 +29,8 @@ const MODES = {
   classic: { name: '经典模式', moves: 24, target: 3000 },
   rush: { name: '限时模式', time: 60 },
   collect: { name: '收集模式', moves: 22 },
-  trial: { name: '挑战模式', moves: 22 }
+  trial: { name: '挑战模式', moves: 22 },
+  infinite: { name: '无限模式' }
 };
 
 /* ================= 状态 ================= */
@@ -741,7 +742,10 @@ async function resolve(initialSeed = null) {
     const { clear } = computeClearEffect(seed);
     const finalUnlocks = unlocks.filter(p => !clear.has(key(p)));
     sndMatch(combo);
-    if (combo > 0) showCombo(combo + 1);
+    if (combo > 0) {
+      showCombo(combo + 1);
+      if (mode === 'infinite') dropBooster('连击奖励');
+    }
     updateTargets(clear);
     await animateClear(clear);
     for (const p of finalUnlocks) { const g = grid[p.r][p.c]; if (isGem(g)) g.locked = false; }
@@ -875,7 +879,7 @@ async function attemptMove(a, b) {
   busy = true;
   const ok = await tryMove(a, b, ga, gb);
   if (ok) {
-    if (mode !== 'rush') { moves--; updateHud(); }
+    if (mode !== 'rush' && mode !== 'infinite') { moves--; updateHud(); }
     evaluateEnd();
   }
   busy = false;
@@ -1016,7 +1020,7 @@ function consumeBooster(b) {
   return true;
 }
 
-function dropBooster() {
+function dropBooster(tag = '') {
   const pool = BOOSTER_KEYS.filter(boosterUsable);
   if (!pool.length) return;
   const b = pool[rand(pool.length)];
@@ -1024,7 +1028,8 @@ function dropBooster() {
   updateBoosters();
   const btn = ui.boosters.querySelector(`[data-b="${b}"]`);
   if (btn) { btn.classList.remove('boost-gain'); void btn.offsetWidth; btn.classList.add('boost-gain'); }
-  toast(BOOSTERS[b].icon + ' 获得 ' + BOOSTERS[b].label + '！');
+  const word = tag || '获得';
+  toast(BOOSTERS[b].icon + ' ' + word + ' ' + BOOSTERS[b].label + '！');
   sndBoosterDrop();
 }
 
@@ -1160,7 +1165,7 @@ function setScore(v) {
 
 function updateHud() {
   setScore(score);
-  if (mode !== 'rush') ui.hMoves.textContent = moves;
+  if (mode !== 'rush') ui.hMoves.textContent = (moves === Infinity ? '∞' : moves);
   if (mode === 'rush') {
     ui.hTime.textContent = timeLeft;
     ui.hTime.classList.toggle('low', timeLeft <= 5 && timeLeft >= 0);
@@ -1273,6 +1278,8 @@ function startGame(m) {
     moves = MODES.collect.moves;
     const order = shuffleArr([0, 1, 2, 3, 4, 5]).slice(0, 4);
     collectRemain = order.map(t => ({ type: t, left: 6 + rand(5) }));
+  } else if (m === 'infinite') {
+    moves = Infinity;
   }
 
   initBoard(opts);
@@ -1284,6 +1291,7 @@ function startGame(m) {
 
   // HUD 显示
   ui.hudMoves.style.display = (m !== 'rush') ? '' : 'none';
+  ui.hudMoves.querySelector('.k').textContent = (m === 'infinite') ? '无限步数' : '剩余步数';
   ui.hudTime.style.display = (m === 'rush') ? '' : 'none';
   ui.hudLevel.style.display = (m === 'trial') ? '' : 'none';
   ui.hudTarget.style.display = (m === 'classic' || m === 'trial') ? '' : 'none';
@@ -1297,6 +1305,7 @@ function startGame(m) {
   updateBest();
   renderTargets();
   updateHud();
+  ui.tip.textContent = (m === 'infinite') ? '无限步数随意玩，打出连击即可获得道具奖励！' : '按住糖果向上下左右拖动，交换位置凑成 3 个以上即可消除';
   render();
   running = true;
 
