@@ -154,6 +154,7 @@ const sndMovesUp = () => { beep(523, 0.09, 'triangle', 0.1); beep(659, 0.1, 'tri
 const sndTimeUp = () => { beep(880, 0.06, 'square', 0.08); beep(988, 0.06, 'square', 0.08, 0.1); beep(1175, 0.14, 'triangle', 0.09, 0.2); };
 const sndDoublerUp = () => [440, 554, 659, 880, 1109, 1319, 1760].forEach((f, i) => beep(f, 0.14, 'sine', 0.09, i * 0.04));
 const sndBoosterDrop = () => { beep(660, 0.08, 'sine', 0.1); beep(880, 0.1, 'sine', 0.09, 0.06); beep(1100, 0.14, 'sine', 0.08, 0.12); };
+const sndChain = i => beep(460 + i * 130, 0.08, 'triangle', 0.07);
 
 /* ================= 背景音乐 ================= */
 const MUSIC = [261.63, 329.63, 392.0, 523.25];
@@ -320,7 +321,11 @@ function specialArea(g, r, c) {
 function computeClearEffect(seed) {
   const clear = new Set();
   const queue = [...seed];
+  const depth = new Map();
   const processed = new Set();
+  for (const k of seed) depth.set(k, 0);
+  let chainCount = 0;
+  const CHAIN_MAX = 26;
   while (queue.length) {
     const k = queue.pop();
     if (clear.has(k)) continue;
@@ -329,11 +334,35 @@ function computeClearEffect(seed) {
     if (!g) continue;
     clear.add(k);
     if (g.stone) continue;
+    const d = depth.get(k) || 0;
     if (g.special && !processed.has(k)) {
       processed.add(k);
       for (const cc of specialArea(g, r, c)) {
         const kk = key(cc);
-        if (!clear.has(kk)) queue.push(kk);
+        if (!clear.has(kk)) {
+          if (!depth.has(kk)) depth.set(kk, d + 1);
+          queue.push(kk);
+        }
+      }
+    } else if (!g.special) {
+      // 连锁反应：同色相邻方块以衰减概率引爆，形成链式扩散
+      const p = d === 0 ? 0.5 : (d === 1 ? 0.18 : 0);
+      if (p <= 0 || chainCount >= CHAIN_MAX) continue;
+      for (const [dr, dc] of DIRS) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nc < 0 || nr >= ROWS || nc >= COLS) continue;
+        const ng = grid[nr][nc];
+        if (!isGem(ng)) continue;
+        const nk = nr + ',' + nc;
+        if (clear.has(nk) || depth.has(nk)) continue;
+        if (ng.special) {
+          depth.set(nk, d + 1);
+          queue.push(nk);
+        } else if (ng.type === g.type && Math.random() < p) {
+          depth.set(nk, d + 1);
+          chainCount++;
+          queue.push(nk);
+        }
       }
     }
   }
@@ -629,13 +658,26 @@ function fxDoubler() {
 }
 
 async function animateClear(clear) {
+  // 按到消除中心的距离排序，分波爆炸，形成连锁扩散的视觉冲击
+  const cells = [...clear].map(k => {
+    const [r, c] = k.split(',').map(Number);
+    return { r, c };
+  });
+  const { x, y } = clearCenter(clear);
+  cells.sort((a, b) => {
+    const da = Math.hypot((a.c + 0.5) * cellSize - x, (a.r + 0.5) * cellSize - y);
+    const db = Math.hypot((b.c + 0.5) * cellSize - x, (b.r + 0.5) * cellSize - y);
+    return da - db;
+  });
+  const WAVES = 4;
+  const per = Math.max(1, Math.ceil(cells.length / WAVES));
   let waveColor = '#ffd166';
   let sawSpecial = null;
-  for (const k of clear) {
-    const [r, c] = k.split(',').map(Number);
+  let wave = 0;
+  for (let i = 0; i < cells.length; i++) {
+    const { r, c } = cells[i];
     const g = grid[r][c];
-    if (!g) continue;
-    const el = els.get(g.id);
+    const el = g ? els.get(g.id) : null;
     if (el) {
       el.classList.add('poof');
       spawnParticles(el, g);
@@ -643,6 +685,10 @@ async function animateClear(clear) {
       if (g.special) { sndSpecialFire(g.special); sawSpecial = g.special; }
       else if (g.locked) sndLockBreak();
       else if (g.frozen) sndIceBreak();
+    }
+    if ((i + 1) % per === 0 && i < cells.length - 1) {
+      sndChain(wave++);
+      await sleep(36);
     }
   }
   spawnShockwave(clear, waveColor);
