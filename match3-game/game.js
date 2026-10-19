@@ -4,6 +4,7 @@
 const ROWS = 8, COLS = 8, N = 6;
 const GEMS = ['🍓', '🍊', '🍇', '🍏', '🍋', '🫐'];
 const GEM_NAMES = ['草莓', '橙子', '葡萄', '青苹果', '柠檬', '蓝莓'];
+const GEM_COLORS = ['#ff5a76', '#ff9f43', '#a55eea', '#2ecc71', '#feca57', '#4b7bec'];
 const SPECIAL_META = {
   lineH: { label: '横行火箭', icon: '↔️' },
   lineV: { label: '竖列火箭', icon: '↕️' },
@@ -56,9 +57,15 @@ const mkStone = () => ({ id: ++gid, stone: true });
 
 /* ================= 音效 ================= */
 let ac = null;
-function ensureCtx() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } }
+function ensureCtx() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+function unlockAudio() { ensureCtx(); }
 function beep(freq, dur, type = 'sine', vol = 0.12, delay = 0) {
-  if (muted || !ac) return;
+  if (muted) return;
+  ensureCtx();
+  if (!ac) return;
   const t = ac.currentTime + delay;
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.value = freq;
@@ -68,10 +75,37 @@ function beep(freq, dur, type = 'sine', vol = 0.12, delay = 0) {
   o.connect(g); g.connect(ac.destination);
   o.start(t); o.stop(t + dur + 0.02);
 }
+function noiseBurst(dur = 0.3, vol = 0.15) {
+  if (muted) return;
+  ensureCtx();
+  if (!ac) return;
+  const t = ac.currentTime;
+  const n = Math.floor(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, n, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const g = ac.createGain(); g.gain.value = vol;
+  const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+  src.connect(f); f.connect(g); g.connect(ac.destination);
+  src.start(t);
+}
 const sndSwap = () => beep(300, 0.08, 'triangle', 0.08);
 const sndFail = () => beep(140, 0.15, 'sawtooth', 0.06);
-const sndMatch = c => { beep(420 + c * 50, 0.14, 'sine', 0.12); beep(420 + c * 50, 0.14, 'sine', 0.08, 0.03); };
-const sndSpecial = () => { beep(880, 0.2, 'square', 0.06); beep(1320, 0.25, 'square', 0.05, 0.05); };
+const sndMatch = c => { beep(420 + c * 55, 0.14, 'sine', 0.12); beep(420 + c * 55, 0.14, 'sine', 0.08, 0.03); };
+const sndSpecialFire = sp => {
+  if (sp === 'bomb') { noiseBurst(0.3, 0.18); beep(120, 0.28, 'sawtooth', 0.12); }
+  else if (sp === 'rainbow') { [660, 780, 990, 1320, 1650].forEach((f, i) => beep(f, 0.14, 'sine', 0.09, i * 0.045)); }
+  else { beep(540, 0.1, 'square', 0.07); beep(760, 0.16, 'square', 0.06, 0.05); }
+};
+const sndSpawn = () => { beep(700, 0.1, 'sine', 0.09); beep(1050, 0.14, 'sine', 0.07, 0.06); };
+const sndClick = () => beep(240, 0.06, 'triangle', 0.06);
+const sndShuffle = () => { for (let i = 0; i < 5; i++) beep(280 + i * 130, 0.06, 'triangle', 0.06, i * 0.05); };
+const sndDropFx = () => beep(200, 0.05, 'sine', 0.04);
+const sndIceBreak = () => { noiseBurst(0.12, 0.06); beep(1500, 0.08, 'triangle', 0.07); };
+const sndLockBreak = () => beep(520, 0.09, 'square', 0.06);
+const sndCountdown = () => { beep(880, 0.07, 'square', 0.08); beep(880, 0.07, 'square', 0.08, 0.12); };
+const sndCollect = () => { beep(660, 0.1, 'sine', 0.1); beep(880, 0.15, 'sine', 0.09, 0.07); };
 const sndWin = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.22, 'sine', 0.12, i * 0.12));
 const sndLose = () => [400, 330, 260, 200].forEach((f, i) => beep(f, 0.25, 'sine', 0.1, i * 0.13));
 
@@ -253,7 +287,7 @@ function applyGravityAndRefill() {
       if (write !== r) { grid[write][c] = g; grid[r][c] = null; }
       write--;
     }
-    for (let r = write; r >= 0; r--) grid[r][c] = mkGem(randomTypeFor(r, c));
+    for (let r = write; r >= 0; r--) { const g = mkGem(randomTypeFor(r, c)); g.new = true; grid[r][c] = g; }
   }
 }
 
@@ -285,11 +319,15 @@ function syncEl(el, g, r, c) {
     if (g.special) cls += ' special ' + g.special;
     if (g.frozen) cls += ' frozen';
     if (g.locked) cls += ' locked';
+    if (g.new) cls += ' drop';
+    if (g.spawned) cls += ' spawn-pop';
   }
   el.className = cls;
   el.querySelector('.face').textContent = g.stone ? '🪨' : GEMS[g.type];
   const badge = g.special ? SPECIAL_META[g.special].icon : (g.locked ? '🔒' : (g.frozen ? '❄️' : ''));
   el.querySelector('.badge').textContent = badge;
+  if (g.new) delete g.new;
+  if (g.spawned) delete g.spawned;
 }
 
 function render() {
@@ -314,6 +352,7 @@ function applySelection() {
 function setSel(cell) {
   clearSel();
   sel = cell;
+  sndClick();
   applySelection();
 }
 function clearSel() {
@@ -343,11 +382,61 @@ function prepareMatch(cells, comps) {
   return { seed, spawns, unlocks };
 }
 
+function clearCenter(clear) {
+  let sx = 0, sy = 0, n = 0;
+  for (const k of clear) { const [r, c] = k.split(',').map(Number); sx += c; sy += r; n++; }
+  if (!n) return { x: 0, y: 0 };
+  return { x: (sx / n + 0.5) * cellSize, y: (sy / n + 0.5) * cellSize };
+}
+
+function spawnParticles(el, g) {
+  const color = g.stone ? '#9b8fb0' : GEM_COLORS[g.type];
+  const rect = el.getBoundingClientRect();
+  const brd = ui.board.getBoundingClientRect();
+  const x = rect.left - brd.left + rect.width / 2;
+  const y = rect.top - brd.top + rect.height / 2;
+  const count = g.stone ? 6 : 12;
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = cellSize * (0.1 + Math.random() * 0.2);
+    p.style.width = p.style.height = size + 'px';
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    p.style.background = color;
+    const ang = Math.random() * Math.PI * 2;
+    const dist = cellSize * (0.6 + Math.random() * 1.3);
+    p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    p.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+    ui.board.appendChild(p);
+    p.addEventListener('animationend', () => p.remove());
+  }
+}
+
+function spawnScoreFloat(clear, val) {
+  const { x, y } = clearCenter(clear);
+  const s = document.createElement('div');
+  s.className = 'scorefloat';
+  s.textContent = '+' + val;
+  s.style.left = x + 'px';
+  s.style.top = y + 'px';
+  ui.board.appendChild(s);
+  s.addEventListener('animationend', () => s.remove());
+}
+
 async function animateClear(clear) {
   for (const k of clear) {
     const [r, c] = k.split(',').map(Number);
     const g = grid[r][c];
-    if (g) { const el = els.get(g.id); if (el) el.classList.add('poof'); }
+    if (!g) continue;
+    const el = els.get(g.id);
+    if (el) {
+      el.classList.add('poof');
+      spawnParticles(el, g);
+      if (g.special) sndSpecialFire(g.special);
+      else if (g.locked) sndLockBreak();
+      else if (g.frozen) sndIceBreak();
+    }
   }
   await sleep(CLEAR_MS);
   for (const k of clear) {
@@ -365,7 +454,7 @@ function updateTargets(clear) {
     const g = grid[r][c];
     if (!isGem(g)) continue;
     const t = collectRemain.find(x => x.type === g.type);
-    if (t && t.left > 0) { t.left--; changed = true; }
+    if (t && t.left > 0) { t.left--; changed = true; if (t.left === 0) sndCollect(); }
   }
   if (changed) renderTargets();
 }
@@ -393,16 +482,22 @@ async function resolve(initialSeed = null) {
     await animateClear(clear);
     for (const p of finalUnlocks) { const g = grid[p.r][p.c]; if (isGem(g)) g.locked = false; }
     for (const s of spawns) {
-      grid[s.r][s.c] = mkGem(s.type);
-      grid[s.r][s.c].special = s.special;
-      sndSpecial();
+      const ng = mkGem(s.type);
+      ng.special = s.special;
+      ng.spawned = true;
+      grid[s.r][s.c] = ng;
+      showBanner(s.special);
+      sndSpawn();
     }
     applyGravityAndRefill();
     render();
+    sndDropFx();
     await sleep(FALL_MS);
     combo++;
-    score += clear.size * 10 * combo;
+    const gained = clear.size * 10 * combo;
+    score += gained;
     updateHud();
+    spawnScoreFloat(clear, gained);
     seed = null;
   }
   lastSwapA = lastSwapB = null;
@@ -412,9 +507,27 @@ async function resolve(initialSeed = null) {
 function showCombo(c) {
   const el = ui.combo;
   el.textContent = '连击 x' + c + ' !';
+  el.style.fontSize = (38 + Math.min(c, 8) * 4) + 'px';
   el.style.opacity = 1;
+  shakeScreen();
   clearTimeout(el._t);
   el._t = setTimeout(() => { el.style.opacity = 0; }, 550);
+}
+
+function showBanner(sp) {
+  const meta = SPECIAL_META[sp];
+  ui.banner.textContent = meta.icon + ' ' + meta.label + ' 合成！';
+  ui.banner.classList.remove('show');
+  void ui.banner.offsetWidth;
+  ui.banner.classList.add('show');
+  clearTimeout(ui.banner._t);
+  ui.banner._t = setTimeout(() => ui.banner.classList.remove('show'), 900);
+}
+
+function shakeScreen() {
+  ui.board.classList.remove('shake-screen');
+  void ui.board.offsetWidth;
+  ui.board.classList.add('shake-screen');
 }
 
 /* ================= 交换与移动 ================= */
@@ -440,7 +553,6 @@ async function doSpecialCombo(a, b, ga, gb) {
     specialArea(ga, a.r, a.c).forEach(p => seed.add(key(p)));
     specialArea(gb, b.r, b.c).forEach(p => seed.add(key(p)));
   }
-  sndSpecial();
   const { clear } = computeClearEffect(seed);
   updateTargets(clear);
   await animateClear(clear);
@@ -458,7 +570,6 @@ async function rainbowWith(rainCell, otherCell, other) {
     const g = grid[r][c]; if (isGem(g) && g.type === other.type) seed.add(key({ r, c }));
   }
   if (other.special) specialArea(other, otherCell.r, otherCell.c).forEach(p => seed.add(key(p)));
-  sndSpecial();
   const { clear } = computeClearEffect(seed);
   updateTargets(clear);
   await animateClear(clear);
@@ -541,6 +652,8 @@ function shuffleUntilMovable() {
 async function ensureMoves() {
   if (hasAnyMove()) return;
   toast('没有可消除的组合，自动洗牌');
+  sndShuffle();
+  shakeScreen();
   shuffleUntilMovable();
   render();
   await sleep(300);
@@ -580,7 +693,10 @@ function doHint() {
 function updateHud() {
   ui.hScore.textContent = score;
   if (mode !== 'rush') ui.hMoves.textContent = moves;
-  if (mode === 'rush') ui.hTime.textContent = timeLeft;
+  if (mode === 'rush') {
+    ui.hTime.textContent = timeLeft;
+    ui.hTime.classList.toggle('low', timeLeft <= 5 && timeLeft >= 0);
+  }
 }
 
 function renderTargets() {
@@ -711,6 +827,7 @@ function startGame(m) {
       if (gameOver) return;
       timeLeft--;
       updateHud();
+      if (timeLeft <= 5 && timeLeft > 0) sndCountdown();
       if (timeLeft <= 0) { endRush(); }
     }, 1000);
   }
