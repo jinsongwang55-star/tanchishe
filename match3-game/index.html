@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星灵消消乐 · 魔法阵传奇</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>星灵消消乐</h1>
+  <p class="subtitle">魔法阵传奇 · 玩法多样 · 内容新颖</p>
+
+  <div class="wrap">
+    <div class="modes" id="modes">
+      <div class="mode-btn" data-mode="classic"><div class="n">经典模式</div><div class="d">步数冲刺</div></div>
+      <div class="mode-btn" data-mode="rush"><div class="n">限时模式</div><div class="d">60秒疯狂</div></div>
+      <div class="mode-btn" data-mode="collect"><div class="n">收集模式</div><div class="d">指定糖果</div></div>
+      <div class="mode-btn" data-mode="trial"><div class="n">挑战模式</div><div class="d">三重考验</div></div>
+    </div>
+
+    <div class="hud">
+      <div class="item"><div class="k">得分</div><div class="v score" id="h-score">0</div></div>
+      <div class="item" id="hud-moves"><div class="k">剩余步数</div><div class="v moves" id="h-moves">0</div></div>
+      <div class="item" id="hud-time" style="display:none"><div class="k">剩余时间</div><div class="v time" id="h-time">60</div></div>
+      <div class="item" id="hud-level" style="display:none"><div class="k">关卡</div><div class="v" id="h-level">1</div></div>
+      <div class="item" id="hud-target" style="display:none"><div class="k">目标分数</div><div class="v" id="h-target">3000</div></div>
+    </div>
+
+    <div class="targets" id="targets"></div>
+
+    <div class="board-shell">
+      <div id="board"></div>
+      <div id="combo"></div>
+    </div>
+
+    <div class="tipbar" id="tip">点击相邻的糖果交换位置，凑成 3 个以上即可消除</div>
+
+    <div class="controls">
+      <button class="btn" id="btn-hint">提示</button>
+      <button class="btn primary" id="btn-restart">重新开始</button>
+      <button class="btn" id="btn-mute">🔊 音效</button>
+    </div>
+
+    <div class="rules">
+      <b>特殊合成：</b>4 连 = 🚀 火箭（横/竖清一排） · T/L 形 = 💣 炸弹（3×3） · 5 连 = 🌈 彩虹（清同色全部）<br>
+      <b>特殊互碰：</b>火箭+炸弹、双彩虹等可触发更大范围爆发 · 连击有倍率加成<br>
+      <b>挑战模式障碍：</b>❄️ 冰冻（不可移动，可被消除解封） · 🔒 锁链（不可移动，先破锁再消除） · 🪨 陨石（阻挡，需特殊宝石炸毁）
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="card">
+      <h2 id="result-title">胜利！</h2>
+      <div class="score-big" id="result-score">0</div>
+      <p id="result-sub"></p>
+      <div class="controls">
+        <button class="btn primary" id="btn-again">再来一局</button>
+        <button class="btn" id="btn-next" style="display:none">下一关</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>
