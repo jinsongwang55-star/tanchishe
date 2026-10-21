@@ -3,7 +3,6 @@
 /* ================= 常量与配置 ================= */
 const ROWS = 10, COLS = 10, N = 6;
 const GEMS = ['🍓', '🍊', '🍇', '🍏', '🍋', '🫐'];
-const GEM_NAMES = ['草莓', '橙子', '葡萄', '青苹果', '柠檬', '蓝莓'];
 const GEM_COLORS = ['#ff5a76', '#ff9f43', '#a55eea', '#2ecc71', '#feca57', '#4b7bec'];
 const SPECIAL_META = {
   lineH: { label: '横行火箭', icon: '↔️' },
@@ -26,11 +25,11 @@ const DIRS = [[0, 1], [0, -1], [1, 0], [-1, 0]];
 const CLEAR_MS = 230, FALL_MS = 210;
 
 const MODES = {
-  classic: { name: '经典模式', moves: 26, target: 4000 },
-  levels: { name: '闯关模式' },
-  collect: { name: '收集模式', moves: 24 },
-  trial: { name: '挑战模式', moves: 26 },
-  infinite: { name: '无限模式' }
+  classic: { moves: 26, target: 4000 },
+  levels: {},
+  collect: { moves: 24 },
+  trial: { moves: 26 },
+  infinite: {}
 };
 
 /* ================= 30 关闯关配置 ================= */
@@ -90,6 +89,14 @@ function craftIcon(s) {
   return s;
 }
 
+/* ================= 本地存储（安全封装，隐私模式下不崩溃） ================= */
+const store = {
+  get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} },
+  getJSON(k, d = null) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  setJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+
 /* ================= 状态 ================= */
 let grid = [];
 let els = new Map();
@@ -113,16 +120,15 @@ let clearGoal = false;
 let activeColors = 6;
 let curLevel = 1;
 let curStage = null;
-let lvUnlocked = +(localStorage.getItem('m3_unlocked') || 1);
-let lvStars = {};
-try { lvStars = JSON.parse(localStorage.getItem('m3_stars') || '{}'); } catch (e) { lvStars = {}; }
+let lvUnlocked = +(store.get('m3_unlocked', '1') || 1);
+let lvStars = store.getJSON('m3_stars', {});
 let lastSwapA = null, lastSwapB = null;
 let sel = null;
 let drag = null;
 let dragRaf = null;
 let musicTimer = null, musicStep = 0;
 let scoreShown = 0;
-let muted = localStorage.getItem('m3_muted') === '1';
+let muted = store.get('m3_muted', '0') === '1';
 let boosters = { hammer: 0, bomb: 0, rocket: 0, rainbow: 0 };
 let aiming = null;
 let doublerUntil = 0, doublerTimer = null;
@@ -1060,7 +1066,8 @@ function clearAim() {
 }
 
 function boosterUsable(k) {
-  if (k === 'moves' && mode === 'infinite') return false;
+  // 加步数道具在无限/闯关模式下禁用：闯关模式用它可破坏星级公平性
+  if (k === 'moves') return mode !== 'infinite' && mode !== 'levels';
   return true;
 }
 
@@ -1605,9 +1612,7 @@ function cellFromEvent(x, y) {
 }
 
 function pointerPos(e) {
-  const x = e.touches && e.touches[0] ? e.touches[0].clientX : e.clientX;
-  const y = e.touches && e.touches[0] ? e.touches[0].clientY : e.clientY;
-  return { x, y };
+  return { x: e.clientX, y: e.clientY };
 }
 
 function onPointerDown(e) {
