@@ -118,6 +118,7 @@ let collectRemain = [];
 let craftGoal = [];
 let clearGoal = false;
 let activeColors = 6;
+let colorPool = [0, 1, 2, 3, 4, 5]; // 实际参与生成的糖果类型下标（收集目标类型会强制加入）
 let curLevel = 1;
 let curStage = null;
 let lvUnlocked = +(store.get('m3_unlocked', '1') || 1);
@@ -141,6 +142,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const key = p => p.r + ',' + p.c;
 const isGem = g => !!g && !g.stone;
 const rand = n => Math.floor(Math.random() * n);
+const randType = () => colorPool[Math.floor(Math.random() * colorPool.length)];
 const shuffleArr = a => { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const haptic = () => { try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {} };
 
@@ -263,7 +265,7 @@ function randomTypeFor(r, c) {
   if (c >= 2 && isGem(grid[r][c - 1]) && isGem(grid[r][c - 2]) && grid[r][c - 1].type === grid[r][c - 2].type) bad.add(grid[r][c - 1].type);
   if (r >= 2 && isGem(grid[r - 1][c]) && isGem(grid[r - 2][c]) && grid[r - 1][c].type === grid[r - 2][c].type) bad.add(grid[r - 1][c].type);
   let t;
-  do { t = rand(activeColors); } while (bad.has(t) && bad.size < activeColors);
+  do { t = randType(); } while (bad.has(t) && bad.size < colorPool.length);
   return t;
 }
 
@@ -1033,7 +1035,7 @@ function shuffleUntilMovable() {
   do {
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const g = grid[r][c];
-      if (isGem(g) && g.frozen === 0 && g.locked === 0) { g.type = rand(activeColors); g.special = null; }
+      if (isGem(g) && g.frozen === 0 && g.locked === 0) { g.type = randType(); g.special = null; }
     }
     tries++;
   } while ((hasMatch() || !hasAnyMove()) && tries < 500);
@@ -1473,7 +1475,7 @@ function startGame(m) {
   score = 0; level = (m === 'trial') ? level : 1;
   sel = null; drag = null; lastSwapA = lastSwapB = null;
   scoreShown = 0;
-  activeColors = N;
+  activeColors = N; colorPool = [0, 1, 2, 3, 4, 5];
   collectRemain = []; craftGoal = []; clearGoal = false; targetScore = 0;
   resetBoosters();
   if (ui.resultBest) ui.resultBest.textContent = '';
@@ -1484,6 +1486,10 @@ function startGame(m) {
   if (m === 'levels') {
     cfg = LEVELS[curLevel - 1] || LEVELS[0];
     activeColors = cfg.colors || 4;
+    const need = (cfg.collect || []).map(x => x.t);
+    const pool = new Set(Array.from({ length: activeColors }, (_, i) => i));
+    need.forEach(t => pool.add(t));
+    colorPool = [...pool];
     moves = cfg.moves;
     targetScore = cfg.target || 0;
     collectRemain = (cfg.collect || []).map(x => ({ type: x.t, left: x.n }));
