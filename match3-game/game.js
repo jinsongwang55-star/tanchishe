@@ -38,15 +38,15 @@ const MODES = {
 // 星级全局规则：2星=剩余步数≥30%、3星=剩余步数≥50%
 const LEVELS = [
   // —— 阶段① 新手村（1-5）——
-  { name: '初试身手', type: 'score', target: 2500, moves: 30, colors: 4 },
-  { name: '冰之初现', type: 'score', target: 3000, moves: 28, colors: 4, ice: 10 },
-  { name: '收集草莓', type: 'collect', collect: [{ t: 0, n: 15 }], moves: 26, colors: 4 },
-  { name: '锁链初现', type: 'score', target: 3500, moves: 26, colors: 4, lock: 8 },
-  { name: '双料收集', type: 'collect', collect: [{ t: 0, n: 12 }, { t: 4, n: 12 }], moves: 24, colors: 5, ice: 8 },
+  { name: '初试身手', type: 'score', target: 3200, moves: 26, colors: 4 },
+  { name: '冰之初现', type: 'score', target: 4200, moves: 25, colors: 4, ice: 14 },
+  { name: '收集草莓', type: 'collect', collect: [{ t: 0, n: 20 }], moves: 24, colors: 4 },
+  { name: '锁链初现', type: 'score', target: 4800, moves: 23, colors: 4, lock: 12 },
+  { name: '双料收集', type: 'collect', collect: [{ t: 0, n: 15 }, { t: 4, n: 15 }], moves: 22, colors: 5, ice: 10 },
 
   // —— 阶段② 特殊合成教学（6-10）——
-  { name: '造个火箭', type: 'craft', craft: [{ s: 'rocket', n: 2 }], moves: 24, colors: 3 },
-  { name: '造个炸弹', type: 'craft', craft: [{ s: 'bomb', n: 1 }], moves: 24, colors: 4, ice: 12 },
+  { name: '造个火箭', type: 'craft', craft: [{ s: 'rocket', n: 3 }], moves: 22, colors: 3 },
+  { name: '造个炸弹', type: 'craft', craft: [{ s: 'bomb', n: 2 }], moves: 22, colors: 4, ice: 15 },
   { name: '蓝莓葡萄', type: 'collect', collect: [{ t: 5, n: 15 }, { t: 2, n: 15 }], moves: 22, colors: 4, lock: 10 },
   { name: '除冰作战', type: 'clear', moves: 22, colors: 4, ice: 30 },
   { name: '造个彩虹', type: 'craft', craft: [{ s: 'rainbow', n: 1 }], moves: 26, colors: 4, ice: 10 },
@@ -129,6 +129,7 @@ let drag = null;
 let dragRaf = null;
 let musicTimer = null, musicStep = 0;
 let scoreShown = 0;
+let peakCombo = 0; // 本局最高连击数（闯关模式达 200 直接通关）
 let muted = store.get('m3_muted', '0') === '1';
 let boosters = { hammer: 0, bomb: 0, rocket: 0, rainbow: 0 };
 let aiming = null;
@@ -883,6 +884,7 @@ async function resolve(initialSeed = null) {
     sndDropFx();
     await sleep(FALL_MS);
     combo++;
+    if (combo > peakCombo) peakCombo = combo;
     const gained = removed.size * 10 * combo;
     const actual = addScore(gained);
     updateHud();
@@ -1387,7 +1389,7 @@ function saveLevelProgress(stars) {
 
 function evaluateEnd() {
   if (mode === 'levels') {
-    if (levelGoalDone()) return gameWin();
+    if (levelGoalDone() || peakCombo >= 200) return gameWin();
     if (moves <= 0) return gameLose();
   } else if (mode === 'collect') {
     if (collectDone()) return gameWin();
@@ -1475,6 +1477,7 @@ function startGame(m) {
   score = 0; level = (m === 'trial') ? level : 1;
   sel = null; drag = null; lastSwapA = lastSwapB = null;
   scoreShown = 0;
+  peakCombo = 0;
   activeColors = N; colorPool = [0, 1, 2, 3, 4, 5];
   collectRemain = []; craftGoal = []; clearGoal = false; targetScore = 0;
   resetBoosters();
