@@ -365,6 +365,7 @@ h1{
 /* 跟手拖动 */
 .cell.dragging{
   z-index:30;cursor:grabbing;transition:none;
+  scale:1.12;
   filter:brightness(1.2);
   box-shadow:0 10px 22px rgba(150,80,220,.4),0 0 0 3px #fff,0 0 0 5px var(--pink);
 }

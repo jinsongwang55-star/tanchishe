@@ -119,6 +119,7 @@ try { lvStars = JSON.parse(localStorage.getItem('m3_stars') || '{}'); } catch (e
 let lastSwapA = null, lastSwapB = null;
 let sel = null;
 let drag = null;
+let dragRaf = null;
 let musicTimer = null, musicStep = 0;
 let scoreShown = 0;
 let muted = localStorage.getItem('m3_muted') === '1';
@@ -1625,7 +1626,7 @@ function onPointerDown(e) {
   const g = grid[cell.r][cell.c];
   if (!g || g.stone) return;
   const el = els.get(g.id);
-  drag = { r: cell.r, c: cell.c, x: pos.x, y: pos.y, el };
+  drag = { r: cell.r, c: cell.c, x: pos.x, y: pos.y, px: pos.x, py: pos.y, axis: null, el };
   if (el) el.classList.add('dragging');
   sndClick();
   startMusic();
@@ -1636,14 +1637,30 @@ function onPointerMove(e) {
   if (!drag || busy || gameOver) return;
   e.preventDefault();
   const pos = pointerPos(e);
+  drag.px = pos.x; drag.py = pos.y;
   const dx = pos.x - drag.x, dy = pos.y - drag.y;
-  if (drag.el) drag.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  // 越过 6px 死区后锁定主轴，避免斜向抖动
+  if (!drag.axis && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+    drag.axis = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+  }
+  // 用 rAF 合并高频 pointermove，减少移动端掉帧与跟手卡顿
+  if (!dragRaf) dragRaf = requestAnimationFrame(applyDragTransform);
+}
+
+function applyDragTransform() {
+  dragRaf = null;
+  if (!drag || !drag.el) return;
+  let sx = 0, sy = 0;
+  if (drag.axis === 'h') sx = drag.px - drag.x;
+  else if (drag.axis === 'v') sy = drag.py - drag.y;
+  drag.el.style.transform = 'translate(' + sx + 'px,' + sy + 'px)';
 }
 
 function finishDrag(e, commit) {
   const d = drag;
   if (!d) return;
   drag = null;
+  if (dragRaf) { cancelAnimationFrame(dragRaf); dragRaf = null; }
   if (d.el) { d.el.classList.remove('dragging'); d.el.style.transform = ''; }
   if (!commit) return;
   const pos = pointerPos(e);
